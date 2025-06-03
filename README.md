@@ -13,3 +13,4 @@ of my projects just get slapped into `/dev/null`.
 - [ ] Compiled
 - [ ] Easy C interop
 - [ ] Self hosted
+- [ ] Errors that help people new people to learn the language (instead of just looking at examples)
