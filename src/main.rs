@@ -1,4 +1,5 @@
 mod config;
+
 use colored::Colorize;
 
 fn main() {
@@ -23,17 +24,44 @@ fn main() {
 
     for t in Lexer::new(&input_chars) {
         match t {
-            Ok(t) => {}
+            Ok(t) => {
+                dbg!(t);
+            }
             Err(e) => {
                 match &e.v {
                     Error::UnexpectedChar(c) => {
-                        eprintln!("[{}]: Unexpected char found during lexing", "Error".red());
+                        eprintln!(
+                            "[{}]\n  Unexpected char found during lexing `{c}`",
+                            "Error".red()
+                        );
+                    }
+                    Error::InvalidNumberLiteral => {
+                        eprintln!(
+                            "[{}]\n  Invalid number literal found during lexing",
+                            "Error".red()
+                        );
+                        eprintln!(
+                            "[{}]\n  Numbers must be separated by whitespace or other characters that are not a..z etc.\n  For example this `123 123` is two valid number literals\n  `123a 123a` is not.",
+                            "Note".green()
+                        )
                     }
                 }
                 let line_offset = e.offset - e.line_beginning;
-                let line_end = &input[e.line_beginning..].find('\n').unwrap_or(input.len());
-                let line = &input[e.line_beginning..*line_end];
-                let prefix = format!("./{}:{}:{}", &config.input_name, 0, line_offset);
+                let line_end =
+                    &input[e.line_beginning..].find('\n').unwrap_or(input.len()) + e.offset;
+                let line = &input[e.line_beginning..line_end];
+
+                let line_count = {
+                    let upto = &input[0..e.line_beginning];
+                    upto.chars().filter(|c| *c == '\n').count() + 1
+                };
+
+                let prefix = format!(
+                    "./{}:{}:{}",
+                    &config.input_name,
+                    line_count,
+                    line_offset + 1
+                );
                 eprintln!("{prefix}\n{}", line);
                 eprintln!(
                     "{}{}",
@@ -57,6 +85,7 @@ pub struct Lexer<'a> {
 #[derive(Debug, Clone)]
 pub enum Error {
     UnexpectedChar(char),
+    InvalidNumberLiteral,
 }
 #[derive(Debug, Clone)]
 pub enum Token {
@@ -97,6 +126,13 @@ impl<'a> Lexer<'a> {
     fn finished(&self) -> bool {
         self.offset >= self.input.len()
     }
+    fn current(&self) -> Option<&char> {
+        self.input.get(self.offset)
+    }
+    fn eat(&mut self) -> Option<&char> {
+        self.offset += 1;
+        self.input.get(self.offset - 1)
+    }
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -108,7 +144,29 @@ impl<'a> Iterator for Lexer<'a> {
         }
         match self.input[self.offset] {
             c if c.is_ascii_digit() => {
-                todo!()
+                let begin = self.offset;
+                while self.current().is_some_and(|c| c.is_ascii_digit()) {
+                    self.eat();
+                }
+                if self.current().is_some_and(|c| c.is_alphabetic()) {
+                    return Some(Err(Spanned {
+                        offset: begin,
+                        len: self.offset - begin,
+                        line_beginning: self.line_beginning,
+                        v: Error::InvalidNumberLiteral,
+                    }));
+                }
+                let number = self.input[begin..self.offset]
+                    .iter()
+                    .collect::<String>()
+                    .parse()
+                    .unwrap();
+                Some(Ok(Spanned {
+                    offset: begin,
+                    len: self.offset - begin,
+                    line_beginning: self.line_beginning,
+                    v: Token::Number(number),
+                }))
             }
             c => Some(Err(Spanned {
                 offset: self.offset,
