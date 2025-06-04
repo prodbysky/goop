@@ -75,6 +75,14 @@ fn main() {
     }
 }
 
+#[derive(Debug)]
+pub struct Parser {}
+
+fn usage(prog_name: &str) {
+    eprintln!("  [{}]: Usage:", "Info".blue());
+    eprintln!("  [{}]: ./{prog_name} <input.gp>", "Info".blue());
+}
+
 pub type Span = std::ops::Range<usize>;
 #[derive(Debug, Clone)]
 pub struct Spanned<T> {
@@ -82,9 +90,4 @@ pub struct Spanned<T> {
     len: usize,
     line_beginning: usize,
     v: T,
-}
-
-fn usage(prog_name: &str) {
-    eprintln!("  [{}]: Usage:", "Info".blue());
-    eprintln!("  [{}]: ./{prog_name} <input.gp>", "Info".blue());
 }
