@@ -6,7 +6,7 @@ fn main() {
         Some(c) => c,
         None => return,
     };
-    let input: Vec<_> = match std::fs::read_to_string(&config.input_name) {
+    let input = match std::fs::read_to_string(&config.input_name) {
         Ok(i) => i,
         Err(e) => {
             eprintln!(
@@ -17,12 +17,33 @@ fn main() {
             usage(&config.program_name);
             return;
         }
-    }
-    .chars()
-    .collect();
+    };
 
-    for t in Lexer::new(&input) {
-        dbg!(t);
+    let input_chars: Vec<_> = input.chars().collect();
+
+    for t in Lexer::new(&input_chars) {
+        match t {
+            Ok(t) => {}
+            Err(e) => {
+                match &e.v {
+                    Error::UnexpectedChar(c) => {
+                        eprintln!("[{}]: Unexpected char found during lexing", "Error".red());
+                    }
+                }
+                let line_offset = e.offset - e.line_beginning;
+                let line_end = &input[e.line_beginning..].find('\n').unwrap_or(input.len());
+                let line = &input[e.line_beginning..*line_end];
+                let prefix = format!("./{}:{}:{}", &config.input_name, 0, line_offset);
+                eprintln!("{prefix}\n{}", line);
+                eprintln!(
+                    "{}{}",
+                    " ".repeat(e.offset - e.line_beginning),
+                    "^".repeat(e.len)
+                );
+
+                break;
+            }
+        }
     }
 }
 
@@ -35,16 +56,18 @@ pub struct Lexer<'a> {
 
 #[derive(Debug, Clone)]
 pub enum Error {
-    UnexpectedChar(char)
+    UnexpectedChar(char),
 }
 #[derive(Debug, Clone)]
 pub enum Token {
-    Number(u64)
+    Number(u64),
 }
 
 #[derive(Debug, Clone)]
 pub struct Spanned<T> {
-    span: std::ops::Range<usize>,
+    offset: usize,
+    len: usize,
+    line_beginning: usize,
     v: T,
 }
 
@@ -87,7 +110,12 @@ impl<'a> Iterator for Lexer<'a> {
             c if c.is_ascii_digit() => {
                 todo!()
             }
-            _ => 
+            c => Some(Err(Spanned {
+                offset: self.offset,
+                line_beginning: self.line_beginning,
+                len: 1,
+                v: Error::UnexpectedChar(c),
+            })),
         }
     }
 }
