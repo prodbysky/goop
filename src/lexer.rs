@@ -15,6 +15,13 @@ pub enum Error {
 #[derive(Debug, Clone)]
 pub enum Token {
     Number(u64),
+    Operator(Operator),
+}
+
+#[derive(Debug, Clone)]
+pub enum Operator {
+    Plus,
+    Minus,
 }
 
 impl<'a> Lexer<'a> {
@@ -41,9 +48,11 @@ impl<'a> Lexer<'a> {
     fn finished(&self) -> bool {
         self.offset >= self.input.len()
     }
+
     fn current(&self) -> Option<&char> {
         self.input.get(self.offset)
     }
+
     fn eat(&mut self) -> Option<&char> {
         self.offset += 1;
         self.input.get(self.offset - 1)
@@ -74,6 +83,37 @@ impl<'a> Lexer<'a> {
             v: number,
         })
     }
+
+    fn lex_operator(&mut self) -> Result<Spanned<Operator>, Spanned<Error>> {
+        match self.current().unwrap() {
+            '+' => {
+                // TODO: Plus assign (+=) operator
+                self.eat();
+                Ok(Spanned {
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    offset: self.offset - 1,
+                    v: Operator::Plus,
+                })
+            }
+            '-' => {
+                // TODO: Minus assign (-=) operator
+                self.eat();
+                Ok(Spanned {
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    offset: self.offset - 1,
+                    v: Operator::Minus,
+                })
+            }
+            c => Err(Spanned {
+                offset: self.offset,
+                len: 1,
+                line_beginning: self.line_beginning,
+                v: Error::UnexpectedChar(*c),
+            }),
+        }
+    }
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -92,6 +132,15 @@ impl<'a> Iterator for Lexer<'a> {
                     line_beginning: t.line_beginning,
                 });
                 Some(t)
+            }
+            c if "+-".contains(c) => {
+                let op = self.lex_operator().map(|t| Spanned {
+                    v: Token::Operator(t.v),
+                    offset: t.offset,
+                    len: t.len,
+                    line_beginning: t.line_beginning,
+                });
+                Some(op)
             }
             c => Some(Err(Spanned {
                 offset: self.offset,
