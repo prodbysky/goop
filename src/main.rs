@@ -61,7 +61,48 @@ fn main() {
     }
     for e in exprs {
         display_expression(&e.v, 0);
+        let ir = generate_expr_ir(&e.v);
+        dbg!(ir);
     }
+}
+
+#[derive(Debug)]
+pub enum Instr {
+    PushConstInt(u64),
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+pub fn generate_expr_ir(e: &parser::Expression) -> Vec<Instr> {
+    let mut ir = vec![];
+
+    match e {
+        parser::Expression::Integer(i) => {
+            ir.push(Instr::PushConstInt(*i));
+        }
+        parser::Expression::Binary { left, op, right } => {
+            ir.extend(generate_expr_ir(&left.v));
+            ir.extend(generate_expr_ir(&right.v));
+            match op {
+                lexer::Operator::Plus => {
+                    ir.push(Instr::Add);
+                }
+                lexer::Operator::Minus => {
+                    ir.push(Instr::Sub);
+                }
+                lexer::Operator::Star => {
+                    ir.push(Instr::Mul);
+                }
+                lexer::Operator::Slash => {
+                    ir.push(Instr::Div);
+                }
+            }
+        }
+    }
+
+    ir
 }
 
 fn display_expression(e: &parser::Expression, indent: usize) {
