@@ -16,6 +16,8 @@ pub enum Error {
 pub enum Token {
     Number(u64),
     Operator(Operator),
+    OpenParen,
+    CloseParen,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -160,6 +162,24 @@ impl<'a> Iterator for Lexer<'a> {
                     line_beginning: t.line_beginning,
                 });
                 Some(op)
+            }
+            '(' => {
+                self.eat();
+                Some(Ok(Spanned {
+                    offset: self.offset - 1,
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    v: Token::OpenParen,
+                }))
+            }
+            ')' => {
+                self.eat();
+                Some(Ok(Spanned {
+                    offset: self.offset - 1,
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    v: Token::CloseParen,
+                }))
             }
             c => Some(Err(Spanned {
                 offset: self.offset,

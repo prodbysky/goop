@@ -90,6 +90,12 @@ fn main() {
                     "Note".blue(),
                 )
             }
+            Error::UnclosedParenthesis => {
+                eprintln!(
+                    "[{}]\n  Found unbalanced parenthesis when parsing an enclosed expression",
+                    "Error".red(),
+                )
+            }
         };
         display_diagnostic_info(&input, &config.input_name, e);
     }
@@ -158,7 +164,45 @@ impl<'a> Parser<'a> {
         self.parse_term()
     }
     fn parse_term(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        self.parse_factor()
+        let mut left = self.parse_factor()?;
+
+        while self.current().is_some_and(|t| {
+            matches!(
+                t.v,
+                lexer::Token::Operator(lexer::Operator::Plus | lexer::Operator::Minus)
+            )
+        }) {
+            let op = match self.current() {
+                None => {
+                    return Err(Spanned {
+                        offset: self.prev_token.offset,
+                        len: self.prev_token.len,
+                        line_beginning: self.prev_token.line_beginning,
+                        v: Error::ExpectedBinaryOperator,
+                    });
+                }
+                Some(Spanned {
+                    v: lexer::Token::Operator(op),
+                    ..
+                }) => *op,
+                _ => unreachable!(),
+            };
+            self.eat();
+            let right = self.parse_primary()?;
+
+            left = Spanned {
+                offset: left.offset,
+                len: right.offset - left.offset,
+                line_beginning: left.line_beginning,
+                v: Expression::Binary {
+                    left: Box::new(left),
+                    op,
+                    right: Box::new(right),
+                },
+            };
+        }
+
+        Ok(left)
     }
     fn parse_factor(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         let mut left = self.parse_primary()?;
@@ -224,6 +268,46 @@ impl<'a> Parser<'a> {
                 self.eat();
                 r
             }
+            Some(Spanned {
+                v: lexer::Token::OpenParen,
+                ..
+            }) => {
+                self.eat();
+
+                let expr = self.parse_expression()?;
+
+                match self.current() {
+                    None => {
+                        return Err(Spanned {
+                            offset: self.prev_token.offset,
+                            len: self.prev_token.len,
+                            line_beginning: self.prev_token.line_beginning,
+                            v: Error::UnclosedParenthesis,
+                        });
+                    }
+                    Some(Spanned {
+                        v: lexer::Token::CloseParen,
+                        ..
+                    }) => {
+                        self.eat();
+                    }
+                    Some(Spanned {
+                        offset,
+                        len,
+                        line_beginning,
+                        v: _,
+                    }) => {
+                        return Err(Spanned {
+                            offset: *offset,
+                            len: *len,
+                            line_beginning: *line_beginning,
+                            v: Error::UnclosedParenthesis,
+                        });
+                    }
+                };
+
+                Ok(expr)
+            }
             Some(t) => Err(Spanned {
                 offset: t.offset,
                 len: t.len,
@@ -253,6 +337,7 @@ pub enum Error {
     ExpectedPrimaryExpresion,
     UnexpectedTokenInExpression,
     ExpectedBinaryOperator,
+    UnclosedParenthesis,
 }
 
 #[derive(Debug, Clone)]
