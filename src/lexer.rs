@@ -18,10 +18,12 @@ pub enum Token {
     Operator(Operator),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Operator {
     Plus,
     Minus,
+    Star,
+    Slash,
 }
 
 impl<'a> Lexer<'a> {
@@ -85,9 +87,9 @@ impl<'a> Lexer<'a> {
     }
 
     fn lex_operator(&mut self) -> Result<Spanned<Operator>, Spanned<Error>> {
+        // TODO: Operation assign (^=) operator
         match self.current().unwrap() {
             '+' => {
-                // TODO: Plus assign (+=) operator
                 self.eat();
                 Ok(Spanned {
                     len: 1,
@@ -97,13 +99,30 @@ impl<'a> Lexer<'a> {
                 })
             }
             '-' => {
-                // TODO: Minus assign (-=) operator
                 self.eat();
                 Ok(Spanned {
                     len: 1,
                     line_beginning: self.line_beginning,
                     offset: self.offset - 1,
                     v: Operator::Minus,
+                })
+            }
+            '*' => {
+                self.eat();
+                Ok(Spanned {
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    offset: self.offset - 1,
+                    v: Operator::Star,
+                })
+            }
+            '/' => {
+                self.eat();
+                Ok(Spanned {
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    offset: self.offset - 1,
+                    v: Operator::Slash,
                 })
             }
             c => Err(Spanned {
@@ -133,7 +152,7 @@ impl<'a> Iterator for Lexer<'a> {
                 });
                 Some(t)
             }
-            c if "+-".contains(c) => {
+            c if "+-*/".contains(c) => {
                 let op = self.lex_operator().map(|t| Spanned {
                     v: Token::Operator(t.v),
                     offset: t.offset,
