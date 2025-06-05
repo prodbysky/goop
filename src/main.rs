@@ -117,7 +117,7 @@ fn display_diagnostic_info<T>(input: &str, input_name: &str, e: &Spanned<T>) {
         upto.chars().filter(|c| *c == '\n').count() + 1
     };
 
-    let prefix = format!("./{}:{}:{}", input_name, line_count, line_offset + 1);
+    let prefix = format!("  ./{}:{}:{}", input_name, line_count, line_offset + 1);
     eprintln!("{prefix}\n{}", line);
     eprintln!(
         "{}{}",
