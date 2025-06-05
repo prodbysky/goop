@@ -132,13 +132,13 @@ impl<'a> Parser<'a> {
                 offset,
                 len,
                 line_beginning,
-                v: lexer::Token::Number(n),
+                v: lexer::Token::Integer(n),
             }) => {
                 let r = Ok(Spanned {
                     offset: *offset,
                     len: *len,
                     line_beginning: *line_beginning,
-                    v: Expression::Number(*n),
+                    v: Expression::Integer(*n),
                 });
                 self.eat();
                 r
@@ -254,7 +254,7 @@ impl std::fmt::Display for Error {
 
 #[derive(Debug, Clone)]
 pub enum Expression {
-    Number(u64),
+    Integer(u64),
     Binary {
         left: Box<Spanned<Expression>>,
         op: lexer::Operator,

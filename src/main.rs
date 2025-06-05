@@ -60,7 +60,20 @@ fn main() {
         return;
     }
     for e in exprs {
-        dbg!(e);
+        display_expression(&e.v, 0);
+    }
+}
+
+fn display_expression(e: &parser::Expression, indent: usize) {
+    match e {
+        parser::Expression::Integer(i) => {
+            println!("{}Integer {i}", "  ".repeat(indent))
+        }
+        parser::Expression::Binary { left, op, right } => {
+            println!("{}{op:?}", "  ".repeat(indent));
+            display_expression(&left.v, indent + 1);
+            display_expression(&right.v, indent + 1);
+        }
     }
 }
 

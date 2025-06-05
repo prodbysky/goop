@@ -15,7 +15,7 @@ pub enum Error {
 }
 #[derive(Debug, Clone)]
 pub enum Token {
-    Number(u64),
+    Integer(u64),
     Operator(Operator),
     OpenParen,
     CloseParen,
@@ -149,7 +149,7 @@ impl<'a> Iterator for Lexer<'a> {
         match self.input[self.offset] {
             c if c.is_ascii_digit() => {
                 let t = self.lex_number().map(|t| Spanned {
-                    v: Token::Number(t.v),
+                    v: Token::Integer(t.v),
                     offset: t.offset,
                     len: t.len,
                     line_beginning: t.line_beginning,
