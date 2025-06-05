@@ -1,4 +1,5 @@
 use crate::Spanned;
+use colored::Colorize;
 
 #[derive(Debug)]
 pub struct Lexer<'a> {
@@ -68,9 +69,10 @@ impl<'a> Lexer<'a> {
             self.eat();
         }
         if self.current().is_some_and(|c| c.is_alphabetic()) {
+            self.eat();
             return Err(Spanned {
                 offset: begin,
-                len: self.offset - begin,
+                len: self.offset - 1 - begin,
                 line_beginning: self.line_beginning,
                 v: Error::InvalidNumberLiteral,
             });
@@ -181,12 +183,50 @@ impl<'a> Iterator for Lexer<'a> {
                     v: Token::CloseParen,
                 }))
             }
-            c => Some(Err(Spanned {
-                offset: self.offset,
-                line_beginning: self.line_beginning,
-                len: 1,
-                v: Error::UnexpectedChar(c),
-            })),
+            c => {
+                self.eat();
+                Some(Err(Spanned {
+                    offset: self.offset - 1,
+                    line_beginning: self.line_beginning,
+                    len: 1,
+                    v: Error::UnexpectedChar(c),
+                }))
+            }
+        }
+    }
+}
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Self::UnexpectedChar(c) => {
+                writeln!(
+                    f,
+                    "[{}]\n  Unexpected char found during lexing `{c}`",
+                    "Error".red()
+                )?;
+                write!(
+                    f,
+                    "[{}]\n  If the arrow is pointing at whitespace, try retyping the line since you might have inserted invisible unicode characters.\n  If this error still occurs this is a bug in the compiler, please report it in the issues tab of the github repository",
+                    "Help".blue()
+                )
+            }
+            Self::InvalidNumberLiteral => {
+                writeln!(
+                    f,
+                    "[{}]\n  Invalid number literal found during lexing",
+                    "Error".red()
+                )?;
+                writeln!(
+                    f,
+                    "[{}]\n  Numbers must be separated by whitespace or other characters that are not a..z etc.\n  For example this `123 123` is two valid number literals\n  `123a 123a` is not.",
+                    "Note".green()
+                )?;
+                write!(
+                    f,
+                    "[{}]\n  You might have tried to use a binary (0b) or hexadecimal (0x) literal. They are not supported as of now",
+                    "Help".blue()
+                )
+            }
         }
     }
 }
