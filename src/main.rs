@@ -2,6 +2,8 @@ mod config;
 mod lexer;
 mod parser;
 
+use std::io::Write;
+
 use colored::Colorize;
 
 fn main() {
@@ -17,7 +19,7 @@ fn main() {
                 "Error".red(),
                 input_name = config.input_name,
             );
-            usage(&config.program_name);
+            config::usage(&config.program_name);
             return;
         }
     };
@@ -59,11 +61,126 @@ fn main() {
     if !parser_errors.is_empty() {
         return;
     }
-    for e in exprs {
-        display_expression(&e.v, 0);
-        let ir = generate_expr_ir(&e.v);
-        dbg!(ir);
+
+    let expr_to_gen = &exprs[0];
+    let expr_ir = generate_expr_ir(&expr_to_gen.v);
+
+    match config.backend {
+        config::Backend::LLVM => {
+            let mod_string = generate_llvm_ir_module(&expr_ir).unwrap();
+            std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open("main.ll")
+                .unwrap()
+                .write(mod_string.as_bytes())
+                .unwrap();
+            std::process::Command::new("clang")
+                .arg("main.ll")
+                .spawn()
+                .unwrap()
+                .wait()
+                .unwrap();
+        }
     }
+}
+
+pub fn generate_llvm_ir_module(ir: &[Instr]) -> Result<String, inkwell::builder::BuilderError> {
+    let ctx = inkwell::context::Context::create();
+    let module = ctx.create_module("expr");
+    let builder = ctx.create_builder();
+    let i32_type = ctx.i32_type();
+
+    let main_type = i32_type.fn_type(&[], false);
+    let main_func = module.add_function("main", main_type, None);
+    let block = ctx.append_basic_block(main_func, "entry");
+    builder.position_at_end(block);
+
+    let mut temps = vec![];
+
+    for i in ir {
+        match i {
+            Instr::PushConstInt(n) => {
+                let ptr = builder.build_alloca(i32_type, "temp")?;
+                builder.build_store(ptr, i32_type.const_int(*n, false))?;
+                temps.push((ptr, i32_type));
+            }
+            Instr::Add => {
+                let left_idx = temps.len() - 2;
+                let right_idx = temps.len() - 1;
+                let l_value = builder.build_load(temps[left_idx].1, temps[left_idx].0, "load_l")?;
+                let r_value =
+                    builder.build_load(temps[right_idx].1, temps[right_idx].0, "load_r")?;
+                let ptr = builder.build_alloca(i32_type, "temp")?;
+
+                let result = builder.build_int_add(
+                    l_value.into_int_value(),
+                    r_value.into_int_value(),
+                    "result",
+                )?;
+                builder.build_store(ptr, result)?;
+                temps.push((ptr, i32_type));
+            }
+
+            Instr::Sub => {
+                let left_idx = temps.len() - 2;
+                let right_idx = temps.len() - 1;
+                let l_value = builder.build_load(temps[left_idx].1, temps[left_idx].0, "load_l")?;
+                let r_value =
+                    builder.build_load(temps[right_idx].1, temps[right_idx].0, "load_r")?;
+                let ptr = builder.build_alloca(i32_type, "temp")?;
+
+                let result = builder.build_int_sub(
+                    l_value.into_int_value(),
+                    r_value.into_int_value(),
+                    "result",
+                )?;
+                builder.build_store(ptr, result)?;
+                temps.push((ptr, i32_type));
+            }
+
+            Instr::Mul => {
+                let left_idx = temps.len() - 2;
+                let right_idx = temps.len() - 1;
+                let l_value = builder.build_load(temps[left_idx].1, temps[left_idx].0, "load_l")?;
+                let r_value =
+                    builder.build_load(temps[right_idx].1, temps[right_idx].0, "load_r")?;
+                let ptr = builder.build_alloca(i32_type, "temp")?;
+
+                let result = builder.build_int_mul(
+                    l_value.into_int_value(),
+                    r_value.into_int_value(),
+                    "result",
+                )?;
+                builder.build_store(ptr, result)?;
+                temps.push((ptr, i32_type));
+            }
+
+            Instr::Div => {
+                let left_idx = temps.len() - 2;
+                let right_idx = temps.len() - 1;
+                let l_value = builder.build_load(temps[left_idx].1, temps[left_idx].0, "load_l")?;
+                let r_value =
+                    builder.build_load(temps[right_idx].1, temps[right_idx].0, "load_r")?;
+                let ptr = builder.build_alloca(i32_type, "temp")?;
+
+                let result = builder.build_int_signed_div(
+                    l_value.into_int_value(),
+                    r_value.into_int_value(),
+                    "result",
+                )?;
+                builder.build_store(ptr, result)?;
+                temps.push((ptr, i32_type));
+            }
+            _ => todo!(),
+        }
+    }
+    let result =
+        builder.build_load(temps.first().unwrap().1, temps.first().unwrap().0, "result")?;
+    builder.build_return(Some(&result))?;
+    module.verify().unwrap();
+    Ok(module.to_string())
 }
 
 #[derive(Debug)]
@@ -135,11 +252,6 @@ fn display_diagnostic_info<T>(input: &str, input_name: &str, e: &Spanned<T>) {
         " ".repeat(e.offset - e.line_beginning),
         "^".repeat(e.len)
     );
-}
-
-fn usage(prog_name: &str) {
-    eprintln!("  [{}]: Usage:", "Info".blue());
-    eprintln!("  [{}]: ./{prog_name} <input.gp>", "Info".blue());
 }
 
 pub type Span = std::ops::Range<usize>;
