@@ -61,181 +61,25 @@ fn main() {
     if !parser_errors.is_empty() {
         return;
     }
+    display_ast(&program);
+}
 
-    let ir = generate_ir(&program);
-
-    match config.backend {
-        config::Backend::LLVM => {
-            let mod_string = generate_llvm_ir_module(&ir).unwrap();
-            std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open("main.ll")
-                .unwrap()
-                .write(mod_string.as_bytes())
-                .unwrap();
-            std::process::Command::new("clang")
-                .arg("main.ll")
-                .spawn()
-                .unwrap()
-                .wait()
-                .unwrap();
+fn display_ast(ast: &[Spanned<parser::Statement>]) {
+    for s in ast {
+        match &s.v{
+            parser::Statement::Return(v) => {
+                println!("Return:");
+                display_expression(&v.v, 1);
+            }
+            parser::Statement::VarAssign { name, t, expr } => {
+                println!("Assign ({name} : {t}):");
+                display_expression(&expr.v, 1);
+            }
         }
     }
 }
 
-pub fn generate_llvm_ir_module(ir: &[Instr]) -> Result<String, inkwell::builder::BuilderError> {
-    let ctx = inkwell::context::Context::create();
-    let module = ctx.create_module("expr");
-    let builder = ctx.create_builder();
-    let i32_type = ctx.i32_type();
 
-    let main_type = i32_type.fn_type(&[], false);
-    let main_func = module.add_function("main", main_type, None);
-    let block = ctx.append_basic_block(main_func, "entry");
-    builder.position_at_end(block);
-
-    let mut temps = vec![];
-
-    for i in ir {
-        match i {
-            Instr::PushConstInt(n) => {
-                let ptr = builder.build_alloca(i32_type, "temp")?;
-                builder.build_store(ptr, i32_type.const_int(*n, false))?;
-                temps.push((ptr, i32_type));
-            }
-            Instr::Add => {
-                let left_idx = temps.len() - 2;
-                let right_idx = temps.len() - 1;
-                let l_value = builder.build_load(temps[left_idx].1, temps[left_idx].0, "load_l")?;
-                let r_value =
-                    builder.build_load(temps[right_idx].1, temps[right_idx].0, "load_r")?;
-                let ptr = builder.build_alloca(i32_type, "temp")?;
-
-                let result = builder.build_int_add(
-                    l_value.into_int_value(),
-                    r_value.into_int_value(),
-                    "result",
-                )?;
-                builder.build_store(ptr, result)?;
-                temps.push((ptr, i32_type));
-            }
-
-            Instr::Sub => {
-                let left_idx = temps.len() - 2;
-                let right_idx = temps.len() - 1;
-                let l_value = builder.build_load(temps[left_idx].1, temps[left_idx].0, "load_l")?;
-                let r_value =
-                    builder.build_load(temps[right_idx].1, temps[right_idx].0, "load_r")?;
-                let ptr = builder.build_alloca(i32_type, "temp")?;
-
-                let result = builder.build_int_sub(
-                    l_value.into_int_value(),
-                    r_value.into_int_value(),
-                    "result",
-                )?;
-                builder.build_store(ptr, result)?;
-                temps.push((ptr, i32_type));
-            }
-
-            Instr::Mul => {
-                let left_idx = temps.len() - 2;
-                let right_idx = temps.len() - 1;
-                let l_value = builder.build_load(temps[left_idx].1, temps[left_idx].0, "load_l")?;
-                let r_value =
-                    builder.build_load(temps[right_idx].1, temps[right_idx].0, "load_r")?;
-                let ptr = builder.build_alloca(i32_type, "temp")?;
-
-                let result = builder.build_int_mul(
-                    l_value.into_int_value(),
-                    r_value.into_int_value(),
-                    "result",
-                )?;
-                builder.build_store(ptr, result)?;
-                temps.push((ptr, i32_type));
-            }
-
-            Instr::Div => {
-                let left_idx = temps.len() - 2;
-                let right_idx = temps.len() - 1;
-                let l_value = builder.build_load(temps[left_idx].1, temps[left_idx].0, "load_l")?;
-                let r_value =
-                    builder.build_load(temps[right_idx].1, temps[right_idx].0, "load_r")?;
-                let ptr = builder.build_alloca(i32_type, "temp")?;
-
-                let result = builder.build_int_signed_div(
-                    l_value.into_int_value(),
-                    r_value.into_int_value(),
-                    "result",
-                )?;
-                builder.build_store(ptr, result)?;
-                temps.push((ptr, i32_type));
-            }
-            Instr::Ret => {
-                let result = builder.build_load(temps.first().unwrap().1, temps.first().unwrap().0, "result")?;
-                builder.build_return(Some(&result))?;
-            }
-        }
-    }
-    module.verify().unwrap();
-    Ok(module.to_string())
-}
-
-#[derive(Debug)]
-pub enum Instr {
-    PushConstInt(u64),
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Ret,
-}
-
-pub fn generate_ir(sts: &[Spanned<parser::Statement>]) -> Vec<Instr> {
-    let mut ir = vec![];
-
-    for s in sts {
-        match &s.v {
-            parser::Statement::Return(e) => {
-                ir.extend(generate_expr_ir(&e.v));
-                ir.push(Instr::Ret);
-            }
-        }
-    }
-
-    ir
-}
-
-pub fn generate_expr_ir(e: &parser::Expression) -> Vec<Instr> {
-    let mut ir = vec![];
-
-    match e {
-        parser::Expression::Integer(i) => {
-            ir.push(Instr::PushConstInt(*i));
-        }
-        parser::Expression::Binary { left, op, right } => {
-            ir.extend(generate_expr_ir(&left.v));
-            ir.extend(generate_expr_ir(&right.v));
-            match op {
-                lexer::Operator::Plus => {
-                    ir.push(Instr::Add);
-                }
-                lexer::Operator::Minus => {
-                    ir.push(Instr::Sub);
-                }
-                lexer::Operator::Star => {
-                    ir.push(Instr::Mul);
-                }
-                lexer::Operator::Slash => {
-                    ir.push(Instr::Div);
-                }
-            }
-        }
-    }
-
-    ir
-}
 
 fn display_expression(e: &parser::Expression, indent: usize) {
     match e {

@@ -23,32 +23,130 @@ impl<'a> Parser<'a> {
         let mut sts = vec![];
 
         while !self.finished() {
-            match self.current().cloned(){
-                Some(Spanned { offset, len, line_beginning, v: lexer::Token::Keyword(k)}) => {
-                    match k {
-                        lexer::Keyword::Return => {
-                            self.eat();
-                            let expr = match self.parse_expression() {
-                                Ok(e) => e,
-                                Err(e) => {errs.push(e); continue;},
-                            };
-                            let semicolon = self.eat().unwrap();
-                            sts.push(Spanned { 
-                                offset: offset, 
-                                len: semicolon.offset - offset, 
-                                line_beginning: line_beginning, 
-                                v: Statement::Return(expr)
-                            });
-                        }
+            match self.current().cloned() {
+                Some(Spanned {
+                    offset,
+                    len: _,
+                    line_beginning,
+                    v: lexer::Token::Keyword(k),
+                }) => match k {
+                    lexer::Keyword::Return => {
+                        self.eat();
+                        let expr = match self.parse_expression() {
+                            Ok(e) => e,
+                            Err(e) => {
+                                errs.push(e);
+                                continue;
+                            }
+                        };
+                        let semicolon = self.eat().unwrap();
+                        sts.push(Spanned {
+                            offset: offset,
+                            len: semicolon.offset - offset,
+                            line_beginning: line_beginning,
+                            v: Statement::Return(expr),
+                        });
                     }
-                }
+                    lexer::Keyword::Let => {
+                        let l = self.eat().unwrap();
+                        let ident = match self.current().cloned() {
+                            Some(Spanned {
+                                offset: _,
+                                len: _,
+                                line_beginning: _,
+                                v: lexer::Token::Identifier(ident),
+                            }) => ident,
+                            Some(Spanned {
+                                offset: _,
+                                len: _,
+                                line_beginning: _,
+                                v: _,
+                            }) => {
+                                errs.push(Spanned {
+                                    offset: self.prev_token.offset,
+                                    len: self.prev_token.len,
+                                    line_beginning: self.prev_token.line_beginning,
+                                    v: Error::ExpectedIdentifier,
+                                });
+                                break;
+                            }
+                            None => {
+                                errs.push(Spanned {
+                                    offset: self.prev_token.offset,
+                                    len: self.prev_token.len,
+                                    line_beginning: self.prev_token.line_beginning,
+                                    v: Error::ExpectedIdentifier,
+                                });
+                                break;
+                            }
+                        };
+                        self.eat();
+                        self.eat();
+                        let type_name = match self.current().cloned() {
+                            Some(Spanned {
+                                offset: _,
+                                len: _,
+                                line_beginning: _,
+                                v: lexer::Token::Identifier(ident),
+                            }) => ident,
+                            Some(Spanned {
+                                offset: _,
+                                len: _,
+                                line_beginning: _,
+                                v: _,
+                            }) => {
+                                errs.push(Spanned {
+                                    offset: self.prev_token.offset,
+                                    len: self.prev_token.len,
+                                    line_beginning: self.prev_token.line_beginning,
+                                    v: Error::ExpectedIdentifier,
+                                });
+                                break;
+                            }
+                            None => {
+                                errs.push(Spanned {
+                                    offset: self.prev_token.offset,
+                                    len: self.prev_token.len,
+                                    line_beginning: self.prev_token.line_beginning,
+                                    v: Error::ExpectedIdentifier,
+                                });
+                                break;
+                            }
+                        };
+                        self.eat();
+                        let expr = match self.parse_expression() {
+                            Ok(e) => e,
+                            Err(e) => {
+                                errs.push(e);
+                                continue;
+                            }
+                        };
+                        let e = self.eat().unwrap();
+                        sts.push(Spanned {
+                            offset: l.offset,
+                            len: e.offset - l.offset,
+                            line_beginning: l.line_beginning,
+                            v: Statement::VarAssign {
+                                name: ident.to_string(),
+                                t: type_name.to_string(),
+                                expr,
+                            },
+                        });
+                    }
+                },
+
                 None => unreachable!(),
-                Some(Spanned { offset, len, line_beginning, v}) => {
+                Some(Spanned {
+                    offset,
+                    len,
+                    line_beginning,
+                    v: _,
+                }) => {
                     errs.push(Spanned {
                         offset: offset,
                         len: len,
                         line_beginning: line_beginning,
-                        v: Error::UnexpectedToken
+                        v: Error::UnexpectedToken,
                     });
                     self.eat();
                 }
@@ -215,7 +313,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-
     fn current(&self) -> Option<&Spanned<lexer::Token>> {
         self.tokens.get(0)
     }
@@ -238,6 +335,7 @@ pub enum Error {
     ExpectedBinaryOperator,
     UnclosedParenthesis,
     UnexpectedToken,
+    ExpectedIdentifier,
 }
 
 impl std::fmt::Display for Error {
@@ -274,7 +372,18 @@ impl std::fmt::Display for Error {
                 )
             }
             Self::UnexpectedToken => {
-                write!(f, "[{}]\n  Found an unexpected token when parsing statement", "Error".red())
+                write!(
+                    f,
+                    "[{}]\n  Found an unexpected token when parsing statement",
+                    "Error".red()
+                )
+            }
+            Self::ExpectedIdentifier => {
+                write!(
+                    f,
+                    "[{}]\n  Expected an identifier here (variable name?)",
+                    "Error".red()
+                )
             }
         }
     }
@@ -292,7 +401,10 @@ pub enum Expression {
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Return(Spanned<Expression>)
+    Return(Spanned<Expression>),
+    VarAssign {
+        name: String,
+        t: String,
+        expr: Spanned<Expression>,
+    },
 }
-
-
