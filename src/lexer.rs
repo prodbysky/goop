@@ -11,15 +11,25 @@ pub struct Lexer<'a> {
 #[derive(Debug, Clone)]
 pub enum Error {
     UnexpectedChar(char),
+    UnexpectedIdentifier,
     InvalidNumberLiteral,
 }
+
 #[derive(Debug, Clone)]
 pub enum Token {
     Integer(u64),
     Operator(Operator),
+    Keyword(Keyword),
     OpenParen,
     CloseParen,
+    Semicolon
 }
+
+#[derive(Debug, Clone)]
+pub enum Keyword {
+    Return
+}
+
 
 #[derive(Debug, Clone, Copy)]
 pub enum Operator {
@@ -183,6 +193,40 @@ impl<'a> Iterator for Lexer<'a> {
                     v: Token::CloseParen,
                 }))
             }
+            ';' => {
+                self.eat();
+                Some(Ok(Spanned {
+                    offset: self.offset - 1,
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    v: Token::Semicolon,
+                }))
+            }
+            'a'..='z' | 'A'..='Z' => {
+                let begin = self.offset;
+                while self.current().is_some_and(|c| c.is_ascii_alphanumeric()) {
+                    self.eat();
+                }
+                let end = self.offset;
+                let slice: String = self.input[begin..end].iter().collect();
+                match slice.as_str() {
+                    "return" => Some(Ok(
+                            Spanned { 
+                                offset: begin, 
+                                len: end-begin, 
+                                line_beginning: self.line_beginning, 
+                                v: Token::Keyword(Keyword::Return) 
+                            }
+                        )),
+                    _ => Some(Err(Spanned {
+                        offset: begin,
+                        len: end - begin,
+                        line_beginning: self.line_beginning,
+                        v: Error::UnexpectedIdentifier
+                    }))
+                }
+
+            }
             c => {
                 self.eat();
                 Some(Err(Spanned {
@@ -225,6 +269,18 @@ impl std::fmt::Display for Error {
                     f,
                     "[{}]\n  You might have tried to use a binary (0b) or hexadecimal (0x) literal. They are not supported as of now",
                     "Help".blue()
+                )
+            }
+            Self::UnexpectedIdentifier => {
+                writeln!(
+                    f,
+                    "[{}]\n  Invalid identifier found during lexing",
+                    "Error".red()
+                )?;
+                writeln!(
+                    f,
+                    "[{}]\n  Only the `return` keyword is an accepted identifier",
+                    "Note".green()
                 )
             }
         }

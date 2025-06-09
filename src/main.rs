@@ -53,7 +53,7 @@ fn main() {
         .collect();
 
     let parser = parser::Parser::new(&tokens);
-    let (exprs, parser_errors) = parser.parse();
+    let (program, parser_errors) = parser.parse();
     for e in &parser_errors {
         eprintln!("{}", e.v);
         display_diagnostic_info(&input, &config.input_name, e);
@@ -62,12 +62,11 @@ fn main() {
         return;
     }
 
-    let expr_to_gen = &exprs[0];
-    let expr_ir = generate_expr_ir(&expr_to_gen.v);
+    let ir = generate_ir(&program);
 
     match config.backend {
         config::Backend::LLVM => {
-            let mod_string = generate_llvm_ir_module(&expr_ir).unwrap();
+            let mod_string = generate_llvm_ir_module(&ir).unwrap();
             std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -173,12 +172,12 @@ pub fn generate_llvm_ir_module(ir: &[Instr]) -> Result<String, inkwell::builder:
                 builder.build_store(ptr, result)?;
                 temps.push((ptr, i32_type));
             }
-            _ => todo!(),
+            Instr::Ret => {
+                let result = builder.build_load(temps.first().unwrap().1, temps.first().unwrap().0, "result")?;
+                builder.build_return(Some(&result))?;
+            }
         }
     }
-    let result =
-        builder.build_load(temps.first().unwrap().1, temps.first().unwrap().0, "result")?;
-    builder.build_return(Some(&result))?;
     module.verify().unwrap();
     Ok(module.to_string())
 }
@@ -190,6 +189,22 @@ pub enum Instr {
     Sub,
     Mul,
     Div,
+    Ret,
+}
+
+pub fn generate_ir(sts: &[Spanned<parser::Statement>]) -> Vec<Instr> {
+    let mut ir = vec![];
+
+    for s in sts {
+        match &s.v {
+            parser::Statement::Return(e) => {
+                ir.extend(generate_expr_ir(&e.v));
+                ir.push(Instr::Ret);
+            }
+        }
+    }
+
+    ir
 }
 
 pub fn generate_expr_ir(e: &parser::Expression) -> Vec<Instr> {

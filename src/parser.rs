@@ -18,21 +18,44 @@ impl<'a> Parser<'a> {
         self.tokens.is_empty()
     }
 
-    pub fn parse(mut self) -> (Vec<Spanned<Expression>>, Vec<Spanned<Error>>) {
+    pub fn parse(mut self) -> (Vec<Spanned<Statement>>, Vec<Spanned<Error>>) {
         let mut errs = vec![];
-        let mut es = vec![];
+        let mut sts = vec![];
 
         while !self.finished() {
-            match self.parse_expression() {
-                Ok(t) => es.push(t),
-                Err(e) => {
-                    errs.push(e);
+            match self.current().cloned(){
+                Some(Spanned { offset, len, line_beginning, v: lexer::Token::Keyword(k)}) => {
+                    match k {
+                        lexer::Keyword::Return => {
+                            self.eat();
+                            let expr = match self.parse_expression() {
+                                Ok(e) => e,
+                                Err(e) => {errs.push(e); continue;},
+                            };
+                            let semicolon = self.eat().unwrap();
+                            sts.push(Spanned { 
+                                offset: offset, 
+                                len: semicolon.offset - offset, 
+                                line_beginning: line_beginning, 
+                                v: Statement::Return(expr)
+                            });
+                        }
+                    }
+                }
+                None => unreachable!(),
+                Some(Spanned { offset, len, line_beginning, v}) => {
+                    errs.push(Spanned {
+                        offset: offset,
+                        len: len,
+                        line_beginning: line_beginning,
+                        v: Error::UnexpectedToken
+                    });
                     self.eat();
                 }
             }
         }
 
-        (es, errs)
+        (sts, errs)
     }
 
     fn parse_expression(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
@@ -192,6 +215,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+
     fn current(&self) -> Option<&Spanned<lexer::Token>> {
         self.tokens.get(0)
     }
@@ -213,6 +237,7 @@ pub enum Error {
     UnexpectedTokenInExpression,
     ExpectedBinaryOperator,
     UnclosedParenthesis,
+    UnexpectedToken,
 }
 
 impl std::fmt::Display for Error {
@@ -248,6 +273,9 @@ impl std::fmt::Display for Error {
                     "Error".red(),
                 )
             }
+            Self::UnexpectedToken => {
+                write!(f, "[{}]\n  Found an unexpected token when parsing statement", "Error".red())
+            }
         }
     }
 }
@@ -261,3 +289,10 @@ pub enum Expression {
         right: Box<Spanned<Expression>>,
     },
 }
+
+#[derive(Debug, Clone)]
+pub enum Statement {
+    Return(Spanned<Expression>)
+}
+
+
