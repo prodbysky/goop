@@ -2,8 +2,6 @@ mod config;
 mod lexer;
 mod parser;
 
-use std::io::Write;
-
 use colored::Colorize;
 
 fn main() {
@@ -24,8 +22,8 @@ fn main() {
         }
     };
 
-    let input_chars: Vec<_> = input.chars().collect();
 
+    let input_chars: Vec<_> = input.chars().collect();
     let lexer = lexer::Lexer::new(&input_chars);
     let elements: Vec<_> = lexer.collect();
     let lexer_errors: Vec<_> = elements
@@ -61,7 +59,68 @@ fn main() {
     if !parser_errors.is_empty() {
         return;
     }
-    display_ast(&program);
+    // display_ast(&program);
+
+    use qbe::{Module, Function, Instr, Value, Type, Block, Linkage};
+
+    let mut module = Module::new();
+    let func = module.add_function(Function::new(Linkage::public(), "main", vec![], Some(Type::Word)));
+    let mut func_temp_count = 0;
+    func.add_block("entry");
+
+    fn make_temp (t_count: &mut usize) -> Value {
+        *t_count += 1;
+        Value::Temporary(format!("t_{}", t_count))
+    }
+
+    fn eval_expr(func: &mut Function, e: &parser::Expression, t_count: &mut usize) -> Value {
+        match e {
+            parser::Expression::Integer(i) => Value::Const(*i),
+            parser::Expression::Binary { left, op, right } => {
+                let left = eval_expr(func, &left.v, t_count);
+                let right = eval_expr(func, &right.v, t_count);
+                match (&left, &right, op) {
+                    (Value::Const(l), Value::Const(r), lexer::Operator::Plus) => return Value::Const(l + r),
+                    (Value::Const(l), Value::Const(r), lexer::Operator::Minus) => return Value::Const(l - r),
+                    (Value::Const(l), Value::Const(r), lexer::Operator::Star) => return Value::Const(l * r),
+                    (Value::Const(l), Value::Const(r), lexer::Operator::Slash) => return Value::Const(l / r),
+                    _ => {}
+                }
+                let result_place = make_temp(t_count);
+                match op {
+                    lexer::Operator::Plus => {
+                        func.assign_instr(result_place.clone(), Type::Word, Instr::Add(left, right));
+                        return result_place;
+                    }
+                    lexer::Operator::Minus => {
+                        func.assign_instr(result_place.clone(), Type::Word, Instr::Sub(left, right));
+                        return result_place;
+                    }
+                    lexer::Operator::Star => {
+                        func.assign_instr(result_place.clone(), Type::Word, Instr::Mul(left, right));
+                        return result_place;
+                    }
+                    lexer::Operator::Slash => {
+                        func.assign_instr(result_place.clone(), Type::Word, Instr::Div(left, right));
+                        return result_place;
+                    }
+                    _ => todo!()
+                }
+            }
+        }
+    }
+
+    for s in &program {
+        match &s.v {
+            parser::Statement::Return(v) => {
+                let value = eval_expr(func, &v.v, &mut func_temp_count);
+                func.add_instr(Instr::Ret(Some(value)));
+            }
+            _ => todo!()
+        }
+    }
+    println!("{}", module.to_string());
+
 }
 
 fn display_ast(ast: &[Spanned<parser::Statement>]) {
