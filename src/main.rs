@@ -3,6 +3,7 @@ mod lexer;
 mod parser;
 
 use colored::Colorize;
+use std::collections::HashMap;
 
 fn main() {
     let config = match config::Config::from_args(std::env::args()) {
@@ -66,6 +67,7 @@ fn main() {
     let mut module = Module::new();
     let func = module.add_function(Function::new(Linkage::public(), "main", vec![], Some(Type::Word)));
     let mut func_temp_count = 0;
+    let mut vars: HashMap<String, Value> = HashMap::new();
     func.add_block("entry");
 
     fn make_temp (t_count: &mut usize) -> Value {
@@ -73,12 +75,15 @@ fn main() {
         Value::Temporary(format!("t_{}", t_count))
     }
 
-    fn eval_expr(func: &mut Function, e: &parser::Expression, t_count: &mut usize) -> Value {
+    fn eval_expr(func: &mut Function, e: &parser::Expression, t_count: &mut usize, vars: &HashMap<String, Value>) -> Value {
         match e {
             parser::Expression::Integer(i) => Value::Const(*i),
+            parser::Expression::Identifier(i) => {
+                return vars.get(i).unwrap().clone()
+            }
             parser::Expression::Binary { left, op, right } => {
-                let left = eval_expr(func, &left.v, t_count);
-                let right = eval_expr(func, &right.v, t_count);
+                let left = eval_expr(func, &left.v, t_count, vars);
+                let right = eval_expr(func, &right.v, t_count, vars);
                 match (&left, &right, op) {
                     (Value::Const(l), Value::Const(r), lexer::Operator::Plus) => return Value::Const(l + r),
                     (Value::Const(l), Value::Const(r), lexer::Operator::Minus) => return Value::Const(l - r),
@@ -113,8 +118,12 @@ fn main() {
     for s in &program {
         match &s.v {
             parser::Statement::Return(v) => {
-                let value = eval_expr(func, &v.v, &mut func_temp_count);
+                let value = eval_expr(func, &v.v, &mut func_temp_count, &vars);
                 func.add_instr(Instr::Ret(Some(value)));
+            }
+            parser::Statement::VarAssign { name, t, expr } => {
+                let value = eval_expr(func, &expr.v, &mut func_temp_count, &vars);
+                vars.insert(name.to_string(), value);
             }
             _ => todo!()
         }
@@ -144,6 +153,10 @@ fn display_expression(e: &parser::Expression, indent: usize) {
     match e {
         parser::Expression::Integer(i) => {
             println!("{}Integer {i}", "  ".repeat(indent))
+        }
+        parser::Expression::Identifier(i) => {
+            println!("{}Identifier {i}", "  ".repeat(indent))
+
         }
         parser::Expression::Binary { left, op, right } => {
             println!("{}{op:?}", "  ".repeat(indent));

@@ -80,8 +80,8 @@ impl<'a> Parser<'a> {
                                 break;
                             }
                         };
-                        self.eat();
-                        self.eat();
+                        self.eat(); // ident
+                        self.eat(); // colon
                         let type_name = match self.current().cloned() {
                             Some(Spanned {
                                 offset: _,
@@ -114,6 +114,7 @@ impl<'a> Parser<'a> {
                             }
                         };
                         self.eat();
+                        self.eat(); // eq
                         let expr = match self.parse_expression() {
                             Ok(e) => e,
                             Err(e) => {
@@ -264,6 +265,16 @@ impl<'a> Parser<'a> {
                 self.eat();
                 r
             }
+            Some(Spanned { offset, len, line_beginning, v: lexer::Token::Identifier(ident)}) => {
+                let r = Ok(Spanned {
+                    offset: *offset,
+                    len: *len,
+                    line_beginning: *line_beginning,
+                    v: Expression::Identifier(ident.to_string()),
+                });
+                self.eat();
+                r
+            }
             Some(Spanned {
                 v: lexer::Token::OpenParen,
                 ..
@@ -392,6 +403,7 @@ impl std::fmt::Display for Error {
 #[derive(Debug, Clone)]
 pub enum Expression {
     Integer(u64),
+    Identifier(String),
     Binary {
         left: Box<Spanned<Expression>>,
         op: lexer::Operator,
