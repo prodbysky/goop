@@ -151,7 +151,7 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> Iterator for Lexer<'a> {
+impl Iterator for Lexer<'_>{
     type Item = Result<Spanned<Token>, Spanned<Error>>;
     fn next(&mut self) -> Option<Self::Item> {
         self.skip_ws();

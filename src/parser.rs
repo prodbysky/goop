@@ -10,7 +10,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Spanned<lexer::Token>>) -> Self {
         Self {
-            tokens: tokens,
+            tokens,
             prev_token: &tokens[0],
         }
     }
@@ -41,9 +41,9 @@ impl<'a> Parser<'a> {
                         };
                         let semicolon = self.eat().unwrap();
                         sts.push(Spanned {
-                            offset: offset,
+                            offset,
                             len: semicolon.offset - offset,
-                            line_beginning: line_beginning,
+                            line_beginning,
                             v: Statement::Return(expr),
                         });
                     }
@@ -144,9 +144,9 @@ impl<'a> Parser<'a> {
                     v: _,
                 }) => {
                     errs.push(Spanned {
-                        offset: offset,
-                        len: len,
-                        line_beginning: line_beginning,
+                        offset,
+                        len,
+                        line_beginning,
                         v: Error::UnexpectedToken,
                     });
                     self.eat();
@@ -325,7 +325,7 @@ impl<'a> Parser<'a> {
     }
 
     fn current(&self) -> Option<&Spanned<lexer::Token>> {
-        self.tokens.get(0)
+        self.tokens.first()
     }
     fn eat(&mut self) -> Option<Spanned<lexer::Token>> {
         match self.tokens.split_at_checked(1) {
@@ -333,7 +333,7 @@ impl<'a> Parser<'a> {
             Some((l, r)) => {
                 self.tokens = r;
                 self.prev_token = &l[0];
-                return Some(l[0].clone());
+                Some(l[0].clone())
             }
         }
     }

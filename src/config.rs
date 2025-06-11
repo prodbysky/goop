@@ -8,14 +8,14 @@ pub struct Config {
 
 #[derive(Debug)]
 pub enum Backend {
-    LLVM,
+    Qbe,
 }
 
 impl Config {
     pub fn from_args(mut args: std::env::Args) -> Option<Self> {
         let program_name = args.next().expect("No standard compliance?");
         let mut input_name = None;
-        let mut backend = Backend::LLVM;
+        let mut backend = Backend::Qbe;
         let args: Vec<String> = args.collect();
         let mut args_slice = &args[..];
         while !args_slice.is_empty() {
@@ -27,8 +27,8 @@ impl Config {
                         return None;
                     }
                     Some(name) => {
-                        if name.as_str() == "llvm" {
-                            backend = Backend::LLVM;
+                        if name.as_str() == "qbe" {
+                            backend = Backend::Qbe;
                             args_slice = &args_slice[2..];
                         } else {
                             eprintln!("[{}]: Invalid backend name", "Error".red());
@@ -67,5 +67,5 @@ pub fn usage(prog_name: &str) {
     eprintln!("  [{}]: Usage:", "Info".blue());
     eprintln!("  [{}]: ./{prog_name} <input.gp> [OPTIONS]", "Info".blue());
     eprintln!("  [{}]: [OPTIONS]:", "Info".blue());
-    eprintln!("  [{}]: -b (Backend): llvm", "Info".blue());
+    eprintln!("  [{}]: -b (Backend): qbe", "Info".blue());
 }
