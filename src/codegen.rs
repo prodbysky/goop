@@ -10,18 +10,22 @@ pub fn generate_qbe_module(program: &[Spanned<parser::Statement>]) -> qbe::Modul
     func.add_block("entry");
 
     for s in program {
-        match &s.v {
-            parser::Statement::Return(v) => {
-                let value = eval_expr(func, &v.v, &mut func_temp_count, &vars);
-                func.add_instr(qbe::Instr::Ret(Some(value)));
-            }
-            parser::Statement::VarAssign { name, t: _, expr } => {
-                let value = eval_expr(func, &expr.v, &mut func_temp_count, &vars);
-                vars.insert(name.to_string(), value);
-            }
-        }
+        generate_statement(func, &mut func_temp_count, &mut vars, &s.v);
     }
     module 
+}
+
+fn generate_statement(func: &mut qbe::Function, func_temp_count: &mut usize, vars: &mut HashMap<String, qbe::Value>, s: &parser::Statement) {
+    match s {
+        parser::Statement::Return(v) => {
+            let value = eval_expr(func, &v.v, func_temp_count, &vars);
+            func.add_instr(qbe::Instr::Ret(Some(value)));
+        }
+        parser::Statement::VarAssign { name, t: _, expr } => {
+            let value = eval_expr(func, &expr.v, func_temp_count, &vars);
+            vars.insert(name.to_string(), value);
+        }
+    }
 }
 
 fn eval_expr(func: &mut qbe::Function, e: &parser::Expression, t_count: &mut usize, vars: &HashMap<String, qbe::Value>) -> qbe::Value {

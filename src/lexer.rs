@@ -14,7 +14,7 @@ pub enum Error {
     InvalidNumberLiteral,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Integer(u64),
     Operator(Operator),
@@ -27,13 +27,13 @@ pub enum Token {
     Colon,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Keyword {
     Return,
     Let,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Operator {
     Plus,
     Minus,
@@ -299,4 +299,82 @@ impl std::fmt::Display for Error {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keywords() {
+        const SRC: &str = "return let let";
+        let chars: Vec<_> = SRC.chars().collect();
+        let tks: Vec<_> = Lexer::new(&chars).map(|r| r.unwrap()).collect();
+        assert_eq!(tks, vec![
+            Spanned {
+                offset: 0,
+                len: 6,
+                line_beginning: 0,
+                v: Token::Keyword(Keyword::Return)
+            },
+            Spanned {
+                offset: 7,
+                len: 3,
+                line_beginning: 0,
+                v: Token::Keyword(Keyword::Let)
+            },
+            Spanned {
+                offset: 11,
+                len: 3,
+                line_beginning: 0,
+                v: Token::Keyword(Keyword::Let)
+            },
+        ])
+    }
+
+    #[test]
+    fn punctuation() {
+        const SRC: &str = "( ( ) ) ; :";
+        let chars: Vec<_> = SRC.chars().collect();
+        let tks: Vec<_> = Lexer::new(&chars).map(|r| r.unwrap()).collect();
+        assert_eq!(tks, vec![
+            Spanned {
+                offset: 0,
+                len: 1,
+                line_beginning: 0,
+                v: Token::OpenParen
+            },
+            Spanned {
+                offset: 2,
+                len: 1,
+                line_beginning: 0,
+                v: Token::OpenParen
+            },
+            Spanned {
+                offset: 4,
+                len: 1,
+                line_beginning: 0,
+                v: Token::CloseParen
+            },
+            Spanned {
+                offset: 6,
+                len: 1,
+                line_beginning: 0,
+                v: Token::CloseParen
+            },
+            Spanned {
+                offset: 8,
+                len: 1,
+                line_beginning: 0,
+                v: Token::Semicolon
+            },
+            Spanned {
+                offset: 10,
+                len: 1,
+                line_beginning: 0,
+                v: Token::Colon
+            },
+        ])
+    }
+
 }

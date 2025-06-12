@@ -5,7 +5,6 @@ mod type_check;
 mod codegen;
 
 use colored::Colorize;
-use std::collections::HashMap;
 
 fn main() {
     let config = match config::Config::from_args(std::env::args()) {
@@ -98,7 +97,8 @@ fn display_diagnostic_info<T>(input: &str, input_name: &str, e: &Spanned<T>) {
 }
 
 pub type Span = std::ops::Range<usize>;
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Spanned<T> {
     pub offset: usize,
     pub len: usize,
