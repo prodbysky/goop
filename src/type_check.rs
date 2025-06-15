@@ -1,6 +1,7 @@
 use crate::Spanned;
 use crate::parser;
 use std::collections::HashMap;
+use colored::Colorize;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Type {
@@ -70,4 +71,21 @@ pub fn type_check(ast: &[Spanned<parser::Statement>]) -> Vec<Spanned<TypeError>>
         }
     }
     errs
+}
+
+impl std::fmt::Display for TypeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TypeMismatch => {
+                writeln!(f, "[{}]\n Found a type mismatch during type checking", "Error".red())?;
+                write!(f, "[{}]\n We only have integers for now so this is a bug somewhere :3", "Note".green())
+            }
+            Self::UndefinedBinding => {
+                writeln!(f, "[{}]\n Found a undefined binding", "Error".red())?;
+                write!(f, "[{}]\n Maybe you have misspeled it?", "Note".green())
+            }
+
+        }
+        
+    }
 }

@@ -64,7 +64,8 @@ fn main() {
     let errs = type_check::type_check(&program);
     println!("Type checking took: {:.2?}", pre_t_check.elapsed());
     for e in &errs {
-        dbg!(e);
+        eprintln!("{}", e.v);
+        display_diagnostic_info(&input, &config.input_name, e);
     }
     if !errs.is_empty() {
         return;
@@ -77,9 +78,9 @@ fn main() {
 }
 
 
-fn display_diagnostic_info<T>(input: &str, input_name: &str, e: &Spanned<T>) {
+fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
     let line_offset = e.offset - e.line_beginning;
-    let line_end = input[e.line_beginning..].find('\n').unwrap_or(input.len());
+    let line_end = input[e.line_beginning..].find('\n').unwrap_or(input.len()) + e.line_beginning;
     let line = &input[e.line_beginning..line_end];
 
     let line_count = {

@@ -185,7 +185,7 @@ impl<'a> Parser<'a> {
                 _ => unreachable!(),
             };
             self.eat();
-            let right = self.parse_primary()?;
+            let right = self.parse_factor()?;
 
             left = Spanned {
                 offset: left.offset,
