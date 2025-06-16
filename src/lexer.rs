@@ -35,7 +35,7 @@ pub enum Keyword {
     Let,
     True,
     False,
-    If
+    If,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -176,7 +176,7 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl Iterator for Lexer<'_>{
+impl Iterator for Lexer<'_> {
     type Item = Result<Spanned<Token>, Spanned<Error>>;
     fn next(&mut self) -> Option<Self::Item> {
         self.skip_ws();
@@ -371,26 +371,29 @@ mod tests {
         const SRC: &str = "return let let";
         let chars: Vec<_> = SRC.chars().collect();
         let tks: Vec<_> = Lexer::new(&chars).map(|r| r.unwrap()).collect();
-        assert_eq!(tks, vec![
-            Spanned {
-                offset: 0,
-                len: 6,
-                line_beginning: 0,
-                v: Token::Keyword(Keyword::Return)
-            },
-            Spanned {
-                offset: 7,
-                len: 3,
-                line_beginning: 0,
-                v: Token::Keyword(Keyword::Let)
-            },
-            Spanned {
-                offset: 11,
-                len: 3,
-                line_beginning: 0,
-                v: Token::Keyword(Keyword::Let)
-            },
-        ])
+        assert_eq!(
+            tks,
+            vec![
+                Spanned {
+                    offset: 0,
+                    len: 6,
+                    line_beginning: 0,
+                    v: Token::Keyword(Keyword::Return)
+                },
+                Spanned {
+                    offset: 7,
+                    len: 3,
+                    line_beginning: 0,
+                    v: Token::Keyword(Keyword::Let)
+                },
+                Spanned {
+                    offset: 11,
+                    len: 3,
+                    line_beginning: 0,
+                    v: Token::Keyword(Keyword::Let)
+                },
+            ]
+        )
     }
 
     #[test]
@@ -398,44 +401,46 @@ mod tests {
         const SRC: &str = "( ( ) ) ; :";
         let chars: Vec<_> = SRC.chars().collect();
         let tks: Vec<_> = Lexer::new(&chars).map(|r| r.unwrap()).collect();
-        assert_eq!(tks, vec![
-            Spanned {
-                offset: 0,
-                len: 1,
-                line_beginning: 0,
-                v: Token::OpenParen
-            },
-            Spanned {
-                offset: 2,
-                len: 1,
-                line_beginning: 0,
-                v: Token::OpenParen
-            },
-            Spanned {
-                offset: 4,
-                len: 1,
-                line_beginning: 0,
-                v: Token::CloseParen
-            },
-            Spanned {
-                offset: 6,
-                len: 1,
-                line_beginning: 0,
-                v: Token::CloseParen
-            },
-            Spanned {
-                offset: 8,
-                len: 1,
-                line_beginning: 0,
-                v: Token::Semicolon
-            },
-            Spanned {
-                offset: 10,
-                len: 1,
-                line_beginning: 0,
-                v: Token::Colon
-            },
-        ])
+        assert_eq!(
+            tks,
+            vec![
+                Spanned {
+                    offset: 0,
+                    len: 1,
+                    line_beginning: 0,
+                    v: Token::OpenParen
+                },
+                Spanned {
+                    offset: 2,
+                    len: 1,
+                    line_beginning: 0,
+                    v: Token::OpenParen
+                },
+                Spanned {
+                    offset: 4,
+                    len: 1,
+                    line_beginning: 0,
+                    v: Token::CloseParen
+                },
+                Spanned {
+                    offset: 6,
+                    len: 1,
+                    line_beginning: 0,
+                    v: Token::CloseParen
+                },
+                Spanned {
+                    offset: 8,
+                    len: 1,
+                    line_beginning: 0,
+                    v: Token::Semicolon
+                },
+                Spanned {
+                    offset: 10,
+                    len: 1,
+                    line_beginning: 0,
+                    v: Token::Colon
+                },
+            ]
+        )
     }
-
 }

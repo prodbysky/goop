@@ -1,8 +1,8 @@
+mod codegen;
 mod config;
 mod lexer;
 mod parser;
 mod type_check;
-mod codegen;
 
 use colored::Colorize;
 use std::io::Write;
@@ -25,14 +25,10 @@ fn main() {
         }
     };
 
-
     let input_chars: Vec<_> = input.chars().collect();
     let lexer = lexer::Lexer::new(&input_chars);
     let elements: Vec<_> = lexer.collect();
-    let lexer_errors: Vec<_> = elements
-        .iter()
-        .filter_map(|e| e.as_ref().err())
-        .collect();
+    let lexer_errors: Vec<_> = elements.iter().filter_map(|e| e.as_ref().err()).collect();
 
     for e in &lexer_errors {
         eprintln!("{}", e.v);
@@ -60,7 +56,6 @@ fn main() {
         return;
     }
 
-
     let pre_t_check = std::time::Instant::now();
     let errs = type_check::type_check(&program);
     println!("Type checking took: {:.2?}", pre_t_check.elapsed());
@@ -75,27 +70,42 @@ fn main() {
     let pre_cg = std::time::Instant::now();
     let module = codegen::generate_qbe_module(&program);
     println!("Code geneneration took: {:.2?}", pre_cg.elapsed());
-    match compile_qbe_module(module, &config.input_name[0..config.input_name.len() - 3]) {
-        Err(e) => {
-            eprintln!("[{}]\n Failed to compile code module: {e}", "Error".red());
-        }
-        Ok(()) => {},
-    };
-
+    if let Err(e) = compile_qbe_module(module, &config.input_name[0..config.input_name.len() - 3]) {
+        eprintln!("[{}]\n Failed to compile code module: {e}", "Error".red());
+    }
 }
 
-fn compile_qbe_module(module: qbe::Module, base_name: &str) -> std::io::Result<()>{
+fn compile_qbe_module(module: qbe::Module, base_name: &str) -> std::io::Result<()> {
     let ssa_name = format!("{}.ssa", &base_name);
     let s_name = format!("{}.s", &base_name);
-    let mut file_ssa = std::io::BufWriter::new(std::fs::OpenOptions::new().create(true).truncate(true).write(true).open(&ssa_name)?);
+    let mut file_ssa = std::io::BufWriter::new(
+        std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&ssa_name)?,
+    );
     write!(file_ssa, "{}", module)?;
     drop(file_ssa);
-    std::process::Command::new("qbe").arg(&ssa_name).arg("-o").arg(&s_name).spawn()?.wait()?;
-    std::process::Command::new("gcc").arg(&s_name).arg("-o").arg(base_name).spawn()?.wait()?;
-    std::process::Command::new("rm").arg(&s_name).arg(&ssa_name).spawn()?.wait()?;
+    std::process::Command::new("qbe")
+        .arg(&ssa_name)
+        .arg("-o")
+        .arg(&s_name)
+        .spawn()?
+        .wait()?;
+    std::process::Command::new("gcc")
+        .arg(&s_name)
+        .arg("-o")
+        .arg(base_name)
+        .spawn()?
+        .wait()?;
+    std::process::Command::new("rm")
+        .arg(&s_name)
+        .arg(&ssa_name)
+        .spawn()?
+        .wait()?;
     Ok(())
 }
-
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
     let line_offset = e.offset - e.line_beginning;

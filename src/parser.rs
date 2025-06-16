@@ -32,134 +32,110 @@ impl<'a> Parser<'a> {
         (sts, errs)
     }
 
-    fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
-            match self.current().cloned() {
-                Some(Spanned {
-                    offset,
-                    len: _,
-                    line_beginning,
-                    v: lexer::Token::Keyword(k),
-                }) => match k {
-                    lexer::Keyword::Return => {
-                        self.eat();
-                        let expr = self.parse_expression()?;
-                        let semicolon = self.eat().unwrap();
-                        Ok(Spanned {
-                            offset,
-                            len: semicolon.offset - offset,
-                            line_beginning,
-                            v: Statement::Return(expr),
-                        })
-                    }
-                    lexer::Keyword::Let => {
-                        let l = self.eat().unwrap();
-                        let ident = match self.current().cloned() {
-                            Some(Spanned {
-                                offset: _,
-                                len: _,
-                                line_beginning: _,
-                                v: lexer::Token::Identifier(ident),
-                            }) => ident,
-                            Some(Spanned {
-                                offset: _,
-                                len: _,
-                                line_beginning: _,
-                                v: _,
-                            }) => {
-                                return Err(Spanned {
-                                    offset: self.prev_token.offset,
-                                    len: self.prev_token.len,
-                                    line_beginning: self.prev_token.line_beginning,
-                                    v: Error::ExpectedIdentifier,
-                                });
-                            }
-                            None => {
-                                return Err(Spanned {
-                                    offset: self.prev_token.offset,
-                                    len: self.prev_token.len,
-                                    line_beginning: self.prev_token.line_beginning,
-                                    v: Error::ExpectedIdentifier,
-                                });
-                            }
-                        };
-                        self.eat(); // ident
-                        self.eat(); // colon
-                        let type_name = match self.current().cloned() {
-                            Some(Spanned {
-                                offset: _,
-                                len: _,
-                                line_beginning: _,
-                                v: lexer::Token::Identifier(ident),
-                            }) => ident,
-                            Some(Spanned {
-                                offset: _,
-                                len: _,
-                                line_beginning: _,
-                                v: _,
-                            }) => {
-                                return Err(Spanned {
-                                    offset: self.prev_token.offset,
-                                    len: self.prev_token.len,
-                                    line_beginning: self.prev_token.line_beginning,
-                                    v: Error::ExpectedIdentifier,
-                                });
-                            }
-                            None => {
-                                return Err(Spanned {
-                                    offset: self.prev_token.offset,
-                                    len: self.prev_token.len,
-                                    line_beginning: self.prev_token.line_beginning,
-                                    v: Error::ExpectedIdentifier,
-                                });
-                            }
-                        };
-                        self.eat();
-                        self.eat(); // eq
-                        let expr = self.parse_expression()?;
-                        let e = self.eat().unwrap();
-                        Ok(Spanned {
-                            offset: l.offset,
-                            len: e.offset - l.offset,
-                            line_beginning: l.line_beginning,
-                            v: Statement::VarAssign {
-                                name: ident.to_string(),
-                                t: type_name.to_string(),
-                                expr,
-                            },
-                        })
-                    }
-                    lexer::Keyword::If => {
-                        let begin = self.eat().unwrap();
-                        let expr = self.parse_expression()?;
-                        self.eat();
-                        let mut body = vec![];
-                        while self.current().is_some_and(|t| t.v != lexer::Token::CloseCurly) {
-                            body.push(self.parse_statement()?);
-                        }
-                        let end = self.eat().unwrap();
-                        Ok(Spanned { offset: begin.offset, len: end.offset - begin.offset, line_beginning: begin.line_beginning, v: Statement::If { cond: expr, body } })
-                    }
-                    lexer::Keyword::True | lexer::Keyword::False => unreachable!(),
-                },
+    fn error_from_last_tk(&self, e: Error) -> Spanned<Error> {
+        Spanned {
+            offset: self.prev_token.offset,
+            len: self.prev_token.len,
+            line_beginning: self.prev_token.line_beginning,
+            v: e,
+        }
+    }
 
-                None => unreachable!(),
-                Some(Spanned {
+    fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        match self.current().cloned() {
+            Some(Spanned {
+                offset,
+                len: _,
+                line_beginning,
+                v: lexer::Token::Keyword(k),
+            }) => match k {
+                lexer::Keyword::Return => {
+                    self.eat();
+                    let expr = self.parse_expression()?;
+                    let semicolon = self.eat().unwrap();
+                    Ok(Spanned {
+                        offset,
+                        len: semicolon.offset - offset,
+                        line_beginning,
+                        v: Statement::Return(expr),
+                    })
+                }
+                lexer::Keyword::Let => {
+                    let l = self.eat().unwrap();
+                    let ident = match self.current().cloned() {
+                        Some(Spanned {
+                            v: lexer::Token::Identifier(ident),
+                            ..
+                        }) => ident,
+                        Some(Spanned { .. }) | None => {
+                            return Err(self.error_from_last_tk(Error::ExpectedIdentifier));
+                        }
+                    };
+                    self.eat(); // ident
+                    self.eat(); // colon
+                    let type_name = match self.current().cloned() {
+                        Some(Spanned {
+                            v: lexer::Token::Identifier(ident),
+                            ..
+                        }) => ident,
+                        Some(Spanned { .. }) | None => {
+                            return Err(self.error_from_last_tk(Error::ExpectedIdentifier));
+                        }
+                    };
+                    self.eat();
+                    self.eat(); // eq
+                    let expr = self.parse_expression()?;
+                    let e = self.eat().unwrap();
+                    Ok(Spanned {
+                        offset: l.offset,
+                        len: e.offset - l.offset,
+                        line_beginning: l.line_beginning,
+                        v: Statement::VarAssign {
+                            name: ident.to_string(),
+                            t: type_name.to_string(),
+                            expr,
+                        },
+                    })
+                }
+                lexer::Keyword::If => {
+                    let begin = self.eat().unwrap();
+                    let expr = self.parse_expression()?;
+                    self.eat();
+                    let mut body = vec![];
+                    while self
+                        .current()
+                        .is_some_and(|t| t.v != lexer::Token::CloseCurly)
+                    {
+                        body.push(self.parse_statement()?);
+                    }
+                    let end = self.eat().unwrap();
+                    Ok(Spanned {
+                        offset: begin.offset,
+                        len: end.offset - begin.offset,
+                        line_beginning: begin.line_beginning,
+                        v: Statement::If { cond: expr, body },
+                    })
+                }
+                lexer::Keyword::True | lexer::Keyword::False => unreachable!(),
+            },
+
+            None => unreachable!(),
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: _,
+            }) => {
+                let e = Err(Spanned {
                     offset,
                     len,
                     line_beginning,
-                    v: _,
-                }) => {
-                    let e =  Err(Spanned {
-                        offset,
-                        len,
-                        line_beginning,
-                        v: Error::UnexpectedToken,
-                    });
-                    self.eat();
-                    e
-                }
+                    v: Error::UnexpectedToken,
+                });
+                self.eat();
+                e
             }
-
+        }
     }
 
     // https://craftinginterpreters.com/parsing-expressions.html
@@ -177,14 +153,7 @@ impl<'a> Parser<'a> {
             )
         }) {
             let op = match self.current() {
-                None => {
-                    return Err(Spanned {
-                        offset: self.prev_token.offset,
-                        len: self.prev_token.len,
-                        line_beginning: self.prev_token.line_beginning,
-                        v: Error::ExpectedBinaryOperator,
-                    });
-                }
+                None => return Err(self.error_from_last_tk(Error::ExpectedBinaryOperator)),
                 Some(Spanned {
                     v: lexer::Token::Operator(op),
                     ..
@@ -207,7 +176,6 @@ impl<'a> Parser<'a> {
         }
 
         Ok(left)
-        
     }
 
     fn parse_term(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
@@ -220,14 +188,7 @@ impl<'a> Parser<'a> {
             )
         }) {
             let op = match self.current() {
-                None => {
-                    return Err(Spanned {
-                        offset: self.prev_token.offset,
-                        len: self.prev_token.len,
-                        line_beginning: self.prev_token.line_beginning,
-                        v: Error::ExpectedBinaryOperator,
-                    });
-                }
+                None => return Err(self.error_from_last_tk(Error::ExpectedBinaryOperator)),
                 Some(Spanned {
                     v: lexer::Token::Operator(op),
                     ..
@@ -261,14 +222,7 @@ impl<'a> Parser<'a> {
             )
         }) {
             let op = match self.current() {
-                None => {
-                    return Err(Spanned {
-                        offset: self.prev_token.offset,
-                        len: self.prev_token.len,
-                        line_beginning: self.prev_token.line_beginning,
-                        v: Error::ExpectedBinaryOperator,
-                    });
-                }
+                None => return Err(self.error_from_last_tk(Error::ExpectedBinaryOperator)),
                 Some(Spanned {
                     v: lexer::Token::Operator(op),
                     ..
@@ -294,12 +248,7 @@ impl<'a> Parser<'a> {
     }
     fn parse_primary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         match self.current() {
-            None => Err(Spanned {
-                v: Error::ExpectedPrimaryExpresion,
-                offset: self.prev_token.offset,
-                len: self.prev_token.len,
-                line_beginning: self.prev_token.line_beginning,
-            }),
+            None => Err(self.error_from_last_tk(Error::ExpectedPrimaryExpresion)),
             Some(Spanned {
                 offset,
                 len,
@@ -315,7 +264,12 @@ impl<'a> Parser<'a> {
                 self.eat();
                 r
             }
-            Some(Spanned { offset, len, line_beginning, v: lexer::Token::Keyword(lexer::Keyword::True)}) => {
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: lexer::Token::Keyword(lexer::Keyword::True),
+            }) => {
                 let r = Ok(Spanned {
                     offset: *offset,
                     len: *len,
@@ -325,7 +279,12 @@ impl<'a> Parser<'a> {
                 self.eat();
                 r
             }
-            Some(Spanned { offset, len, line_beginning, v: lexer::Token::Keyword(lexer::Keyword::False)}) => {
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: lexer::Token::Keyword(lexer::Keyword::False),
+            }) => {
                 let r = Ok(Spanned {
                     offset: *offset,
                     len: *len,
@@ -335,7 +294,12 @@ impl<'a> Parser<'a> {
                 self.eat();
                 r
             }
-            Some(Spanned { offset, len, line_beginning, v: lexer::Token::Identifier(ident)}) => {
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: lexer::Token::Identifier(ident),
+            }) => {
                 let r = Ok(Spanned {
                     offset: *offset,
                     len: *len,
@@ -355,12 +319,7 @@ impl<'a> Parser<'a> {
 
                 match self.current() {
                     None => {
-                        return Err(Spanned {
-                            offset: self.prev_token.offset,
-                            len: self.prev_token.len,
-                            line_beginning: self.prev_token.line_beginning,
-                            v: Error::UnclosedParenthesis,
-                        });
+                        return Err(self.error_from_last_tk(Error::UnclosedParenthesis));
                     }
                     Some(Spanned {
                         v: lexer::Token::CloseParen,
@@ -492,6 +451,6 @@ pub enum Statement {
     },
     If {
         cond: Spanned<Expression>,
-        body: Vec<Spanned<Statement>>
-    }
+        body: Vec<Spanned<Statement>>,
+    },
 }
