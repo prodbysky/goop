@@ -150,109 +150,29 @@ impl<'a> Parser<'a> {
         self.parse_comparison()
     }
 
+
+    // hell yeah
     fn parse_comparison(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        let mut left = self.parse_term()?;
-
-        while self.current().is_some_and(|t| {
-            matches!(
-                t.v,
-                lexer::Token::Operator(lexer::Operator::Less | lexer::Operator::More)
-            )
-        }) {
-            let op = match self.current() {
-                None => return Err(self.error_from_last_tk(Error::ExpectedBinaryOperator)),
-                Some(Spanned {
-                    v: lexer::Token::Operator(op),
-                    ..
-                }) => *op,
-                _ => unreachable!(),
-            };
-            self.eat();
-            let right = self.parse_term()?;
-
-            left = Spanned {
-                offset: left.offset,
-                len: right.offset - left.offset,
-                line_beginning: left.line_beginning,
-                v: Expression::Binary {
-                    left: Box::new(left),
-                    op,
-                    right: Box::new(right),
-                },
-            };
-        }
-
-        Ok(left)
+        self.parse_expr_help(
+            |t| matches!(t.v, lexer::Token::Operator(lexer::Operator::Less | lexer::Operator::More)), 
+            Parser::parse_term
+        )
     }
 
     fn parse_term(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        let mut left = self.parse_factor()?;
-
-        while self.current().is_some_and(|t| {
-            matches!(
-                t.v,
-                lexer::Token::Operator(lexer::Operator::Plus | lexer::Operator::Minus)
-            )
-        }) {
-            let op = match self.current() {
-                None => return Err(self.error_from_last_tk(Error::ExpectedBinaryOperator)),
-                Some(Spanned {
-                    v: lexer::Token::Operator(op),
-                    ..
-                }) => *op,
-                _ => unreachable!(),
-            };
-            self.eat();
-            let right = self.parse_factor()?;
-
-            left = Spanned {
-                offset: left.offset,
-                len: right.offset - left.offset,
-                line_beginning: left.line_beginning,
-                v: Expression::Binary {
-                    left: Box::new(left),
-                    op,
-                    right: Box::new(right),
-                },
-            };
-        }
-
-        Ok(left)
+        self.parse_expr_help(
+            |t| matches!(t.v, lexer::Token::Operator(lexer::Operator::Plus | lexer::Operator::Minus)), 
+            Parser::parse_factor
+        )
     }
+
     fn parse_factor(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        let mut left = self.parse_primary()?;
-
-        while self.current().is_some_and(|t| {
-            matches!(
-                t.v,
-                lexer::Token::Operator(lexer::Operator::Slash | lexer::Operator::Star)
-            )
-        }) {
-            let op = match self.current() {
-                None => return Err(self.error_from_last_tk(Error::ExpectedBinaryOperator)),
-                Some(Spanned {
-                    v: lexer::Token::Operator(op),
-                    ..
-                }) => *op,
-                _ => unreachable!(),
-            };
-            self.eat();
-            let right = self.parse_primary()?;
-
-            left = Spanned {
-                offset: left.offset,
-                len: right.offset - left.offset,
-                line_beginning: left.line_beginning,
-                v: Expression::Binary {
-                    left: Box::new(left),
-                    op,
-                    right: Box::new(right),
-                },
-            };
-        }
-
-        Ok(left)
+        self.parse_expr_help(
+            |t| matches!(t.v, lexer::Token::Operator(lexer::Operator::Slash | lexer::Operator::Star)), 
+            Parser::parse_primary
+        )
     }
+
     fn parse_primary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         match self.current() {
             None => Err(self.error_from_last_tk(Error::ExpectedPrimaryExpresion)),
@@ -358,6 +278,37 @@ impl<'a> Parser<'a> {
                 v: Error::UnexpectedTokenInExpression,
             }),
         }
+    }
+
+    fn parse_expr_help(&mut self, cond: fn(&Spanned<lexer::Token>) -> bool, lower_element: fn(&mut Parser<'a>) -> Result<Spanned<Expression>, Spanned<Error>>) -> Result<Spanned<Expression>, Spanned<Error>> {
+        let mut left = lower_element(self)?;
+
+        while self.current().is_some_and(cond) {
+            let op = match self.current() {
+                None => return Err(self.error_from_last_tk(Error::ExpectedBinaryOperator)),
+                Some(Spanned {
+                    v: lexer::Token::Operator(op),
+                    ..
+                }) => *op,
+                _ => unreachable!(),
+            };
+            self.eat();
+            let right = lower_element(self)?;
+
+            left = Spanned {
+                offset: left.offset,
+                len: right.offset - left.offset,
+                line_beginning: left.line_beginning,
+                v: Expression::Binary {
+                    left: Box::new(left),
+                    op,
+                    right: Box::new(right),
+                },
+            };
+        }
+
+        Ok(left)
+
     }
 
     fn current(&self) -> Option<&Spanned<lexer::Token>> {
