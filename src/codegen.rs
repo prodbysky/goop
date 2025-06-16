@@ -107,7 +107,6 @@ fn eval_expr(
         parser::Expression::Integer(i) => qbe::Value::Const(*i),
         parser::Expression::Bool(i) => qbe::Value::Const(*i as u64),
         parser::Expression::Identifier(i) => {
-            // Load the value from memory
             let var_slot = vars.get(i).unwrap().clone();
             let result = make_temp(t_count);
             func.assign_instr(
@@ -116,6 +115,21 @@ fn eval_expr(
                 qbe::Instr::Load(qbe::Type::Word, var_slot),
             );
             result
+        }
+        parser::Expression::Unary { op, right } => {
+            let right = eval_expr(func, &right.v, t_count, vars);
+            let result_place = make_temp(t_count);
+            match op {
+                lexer::Operator::Not => {
+                    func.assign_instr(result_place.clone(), qbe::Type::Word, qbe::Instr::Cmp(qbe::Type::Word, qbe::Cmp::Eq, right, qbe::Value::Const(0)));
+                    result_place
+                },
+                lexer::Operator::Minus => {
+                    func.assign_instr(result_place.clone(), qbe::Type::Word, qbe::Instr::Sub(qbe::Value::Const(0), right));
+                    result_place
+                },
+                _ => unreachable!()
+            }
         }
         parser::Expression::Binary { left, op, right } => {
             let left = eval_expr(func, &left.v, t_count, vars);
@@ -178,6 +192,7 @@ fn eval_expr(
                     );
                     result_place
                 }
+                lexer::Operator::Not => unreachable!()
             }
         }
     }

@@ -1,3 +1,4 @@
+
 use crate::{Spanned, lexer};
 use colored::Colorize;
 
@@ -189,8 +190,27 @@ impl<'a> Parser<'a> {
     fn parse_factor(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         self.parse_expr_help(
             |t| matches!(t.v, lexer::Token::Operator(lexer::Operator::Slash | lexer::Operator::Star | lexer::Operator::Percent)), 
-            Parser::parse_primary
+            Parser::parse_unary
         )
+    }
+
+    fn parse_unary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
+        if matches!(self.current(), Some(Spanned { v: lexer::Token::Operator(lexer::Operator::Not | lexer::Operator::Minus), ..})) {
+            let (offset, _len, line_beginning, op) = match self.eat().unwrap() {
+                Spanned { offset, len, line_beginning, v: lexer::Token::Operator(a @(lexer::Operator::Not | lexer::Operator::Minus))} => {
+                    (offset, len, line_beginning, a)
+                },
+                _ => unreachable!()
+            };
+            let right = self.parse_unary()?;
+            return Ok(Spanned {
+                offset: offset,
+                len: right.offset - offset,
+                line_beginning: line_beginning,
+                v: Expression::Unary { op, right: Box::new(right) }
+            });
+        }
+        self.parse_primary()
     }
 
     fn parse_primary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
@@ -417,6 +437,10 @@ pub enum Expression {
         op: lexer::Operator,
         right: Box<Spanned<Expression>>,
     },
+    Unary {
+        op: lexer::Operator,
+        right: Box<Spanned<Expression>>
+    }
 }
 
 #[derive(Debug, Clone)]

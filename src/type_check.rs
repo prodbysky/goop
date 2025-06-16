@@ -35,6 +35,18 @@ fn get_expr_type(
     match &e.v {
         parser::Expression::Integer(_) => Ok(Type::Int),
         parser::Expression::Bool(_) => Ok(Type::Bool),
+        parser::Expression::Unary { op, right } => {
+            let right_type = get_expr_type(right, vars)?;
+            match (op, right_type) {
+                (lexer::Operator::Minus, Type::Int) => {
+                    Ok(Type::Int)
+                },
+                (lexer::Operator::Not, Type::Bool) => {
+                    Ok(Type::Bool)
+                },
+                _ => Err(Spanned { offset: right.offset, len: right.len, line_beginning: right.line_beginning, v: TypeError::TypeMismatch })
+            }
+        }
         parser::Expression::Binary { left, op, right } => {
             let (left, right) = (get_expr_type(left, vars)?, get_expr_type(right, vars)?);
             match op {
@@ -60,6 +72,7 @@ fn get_expr_type(
                         v: TypeError::BoolBinaryOp,
                     }),
                 },
+                lexer::Operator::Not => unreachable!()
             }
         }
         parser::Expression::Identifier(ident) => match vars.get(ident) {

@@ -48,6 +48,7 @@ pub enum Operator {
     Percent,
     Less,
     More,
+    Not
 }
 
 impl<'a> Lexer<'a> {
@@ -70,18 +71,6 @@ impl<'a> Lexer<'a> {
                 _ => unreachable!(),
             }
         }
-    }
-    fn finished(&self) -> bool {
-        self.offset >= self.input.len()
-    }
-
-    fn current(&self) -> Option<&char> {
-        self.input.get(self.offset)
-    }
-
-    fn eat(&mut self) -> Option<&char> {
-        self.offset += 1;
-        self.input.get(self.offset - 1)
     }
 
     fn lex_number(&mut self) -> Result<Spanned<u64>, Spanned<Error>> {
@@ -177,6 +166,16 @@ impl<'a> Lexer<'a> {
                     v: Operator::Percent,
                 })
             }
+            '!' => {
+                self.eat();
+                Ok(Spanned {
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    offset: self.offset - 1,
+                    v: Operator::Not,
+                })
+            }
+
             c => Err(Spanned {
                 offset: self.offset,
                 len: 1,
@@ -184,6 +183,19 @@ impl<'a> Lexer<'a> {
                 v: Error::UnexpectedChar(*c),
             }),
         }
+    }
+
+    fn finished(&self) -> bool {
+        self.offset >= self.input.len()
+    }
+
+    fn current(&self) -> Option<&char> {
+        self.input.get(self.offset)
+    }
+
+    fn eat(&mut self) -> Option<&char> {
+        self.offset += 1;
+        self.input.get(self.offset - 1)
     }
 }
 
@@ -204,7 +216,7 @@ impl Iterator for Lexer<'_> {
                 });
                 Some(t)
             }
-            c if "+-*/<>%".contains(c) => {
+            c if "+-*/<>%!".contains(c) => {
                 let op = self.lex_operator().map(|t| Spanned {
                     v: Token::Operator(t.v),
                     offset: t.offset,
