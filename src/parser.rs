@@ -118,6 +118,13 @@ impl<'a> Parser<'a> {
                 }
                 lexer::Keyword::True | lexer::Keyword::False => unreachable!(),
             },
+            Some(Spanned { offset, len: _, line_beginning, v: lexer::Token::Identifier(name)}) => {
+                self.eat().unwrap(); // var reassign
+                self.eat().unwrap(); // =
+                let value = self.parse_expression()?;
+                let end = self.eat().unwrap(); // ;
+                Ok(Spanned { offset, len: end.offset - offset, line_beginning, v: Statement::VarReassign { name, expr: value } })
+            }
 
             None => unreachable!(),
             Some(Spanned {
@@ -447,6 +454,10 @@ pub enum Statement {
     VarAssign {
         name: String,
         t: String,
+        expr: Spanned<Expression>,
+    },
+    VarReassign {
+        name: String,
         expr: Spanned<Expression>,
     },
     If {

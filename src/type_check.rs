@@ -103,6 +103,20 @@ fn type_check_statement(
             }
             vars.insert(name.to_string(), expr_type);
         }
+        parser::Statement::VarReassign { name, expr } => {
+            if vars.get(name).is_none() {
+                return Err(Spanned { offset: s.offset, len: s.len, line_beginning: s.line_beginning, v: TypeError::UndefinedBinding });
+            }
+            let expr_type = get_expr_type(expr, vars)?;
+                if expr_type != *vars.get(name).unwrap() {
+                return Err(Spanned {
+                    offset: s.offset,
+                    len: s.len,
+                    line_beginning: s.line_beginning,
+                    v: TypeError::TypeMismatch,
+                });
+            }
+        }
         parser::Statement::Return(v) => {
             let expr_type = get_expr_type(v, vars)?;
             assert!(expr_type == Type::Int)

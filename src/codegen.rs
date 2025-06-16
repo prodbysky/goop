@@ -43,6 +43,10 @@ fn generate_statement(
             let value = eval_expr(func, &expr.v, func_temp_count, vars);
             vars.insert(name.to_string(), value);
         }
+        parser::Statement::VarReassign { name, expr } => {
+            let value = eval_expr(func, &expr.v, func_temp_count, vars);
+            vars.insert(name.to_string(), value);
+        }
         parser::Statement::If { cond, body } => {
             let cond = eval_expr(func, &cond.v, func_temp_count, vars);
             match cond {
