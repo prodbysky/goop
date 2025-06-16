@@ -36,6 +36,7 @@ pub enum Keyword {
     True,
     False,
     If,
+    While,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -305,6 +306,12 @@ impl Iterator for Lexer<'_> {
                         len: end - begin,
                         line_beginning: self.line_beginning,
                         v: Token::Keyword(Keyword::If),
+                    })),
+                    "while" => Some(Ok(Spanned {
+                        offset: begin,
+                        len: end - begin,
+                        line_beginning: self.line_beginning,
+                        v: Token::Keyword(Keyword::While),
                     })),
                     _ => Some(Ok(Spanned {
                         offset: begin,

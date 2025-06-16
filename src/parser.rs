@@ -116,6 +116,26 @@ impl<'a> Parser<'a> {
                         v: Statement::If { cond: expr, body },
                     })
                 }
+                lexer::Keyword::While => {
+                    let begin = self.eat().unwrap();
+                    let expr = self.parse_expression()?;
+                    self.eat();
+                    let mut body = vec![];
+                    while self
+                        .current()
+                        .is_some_and(|t| t.v != lexer::Token::CloseCurly)
+                    {
+                        body.push(self.parse_statement()?);
+                    }
+                    let end = self.eat().unwrap();
+                    Ok(Spanned {
+                        offset: begin.offset,
+                        len: end.offset - begin.offset,
+                        line_beginning: begin.line_beginning,
+                        v: Statement::While { cond: expr, body },
+                    })
+
+                }
                 lexer::Keyword::True | lexer::Keyword::False => unreachable!(),
             },
             Some(Spanned { offset, len: _, line_beginning, v: lexer::Token::Identifier(name)}) => {
@@ -415,4 +435,8 @@ pub enum Statement {
         cond: Spanned<Expression>,
         body: Vec<Spanned<Statement>>,
     },
+    While {
+        cond: Spanned<Expression>,
+        body: Vec<Spanned<Statement>>,
+    }
 }

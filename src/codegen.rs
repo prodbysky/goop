@@ -49,17 +49,6 @@ fn generate_statement(
         }
         parser::Statement::If { cond, body } => {
             let cond = eval_expr(func, &cond.v, func_temp_count, vars);
-            match cond {
-                qbe::Value::Const(1) => {
-                    for st in body {
-                        generate_statement(func, func_temp_count, label_count, vars, &st.v);
-                    }
-                    return;
-                }
-                qbe::Value::Const(0) => return,
-                _ => {}
-            }
-
             let into = format!("{}", *label_count);
             *label_count += 1;
             let skip = format!("{}", *label_count);
@@ -70,6 +59,22 @@ fn generate_statement(
                 generate_statement(func, func_temp_count, label_count, vars, &st.v);
             }
             func.add_block(skip);
+        }
+        parser::Statement::While { cond, body } => {
+            let header = format!("{}", *label_count);
+            *label_count += 1;
+            let body_l = format!("{}", *label_count);
+            *label_count += 1;
+            let exit = format!("{}", *label_count);
+            *label_count += 1;
+            func.add_block(header);
+            let cond = eval_expr(func, &cond.v, func_temp_count, vars);
+            func.add_instr(qbe::Instr::Jnz(cond, body_l.clone(), exit.clone()));
+            func.add_block(body_l);
+            for st in body {
+                generate_statement(func, func_temp_count, label_count, vars, &st.v);
+            }
+            func.add_block(exit);
         }
     }
 }
@@ -91,27 +96,6 @@ fn eval_expr(
         parser::Expression::Binary { left, op, right } => {
             let left = eval_expr(func, &left.v, t_count, vars);
             let right = eval_expr(func, &right.v, t_count, vars);
-            match (&left, &right, op) {
-                (qbe::Value::Const(l), qbe::Value::Const(r), lexer::Operator::Plus) => {
-                    return qbe::Value::Const(l + r);
-                }
-                (qbe::Value::Const(l), qbe::Value::Const(r), lexer::Operator::Minus) => {
-                    return qbe::Value::Const(l - r);
-                }
-                (qbe::Value::Const(l), qbe::Value::Const(r), lexer::Operator::Star) => {
-                    return qbe::Value::Const(l * r);
-                }
-                (qbe::Value::Const(l), qbe::Value::Const(r), lexer::Operator::Slash) => {
-                    return qbe::Value::Const(l / r);
-                }
-                (qbe::Value::Const(l), qbe::Value::Const(r), lexer::Operator::Less) => {
-                    return qbe::Value::Const((l < r) as u64);
-                }
-                (qbe::Value::Const(l), qbe::Value::Const(r), lexer::Operator::More) => {
-                    return qbe::Value::Const((l > r) as u64);
-                }
-                _ => {}
-            }
             let result_place = make_temp(t_count);
             match op {
                 lexer::Operator::Plus => {

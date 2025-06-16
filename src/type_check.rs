@@ -121,7 +121,7 @@ fn type_check_statement(
             let expr_type = get_expr_type(v, vars)?;
             assert!(expr_type == Type::Int)
         }
-        parser::Statement::If { cond, body } => {
+        parser::Statement::If { cond, body } | parser::Statement::While { cond, body } => {
             let cond_type = get_expr_type(cond, vars)?;
             match cond_type {
                 Type::Int => {
