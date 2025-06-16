@@ -22,6 +22,8 @@ pub enum Token {
     Identifier(String),
     OpenParen,
     CloseParen,
+    OpenCurly,
+    CloseCurly,
     Semicolon,
     Assign,
     Colon,
@@ -31,6 +33,9 @@ pub enum Token {
 pub enum Keyword {
     Return,
     Let,
+    True,
+    False,
+    If
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -39,6 +44,8 @@ pub enum Operator {
     Minus,
     Star,
     Slash,
+    Less,
+    More,
 }
 
 impl<'a> Lexer<'a> {
@@ -141,6 +148,24 @@ impl<'a> Lexer<'a> {
                     v: Operator::Slash,
                 })
             }
+            '<' => {
+                self.eat();
+                Ok(Spanned {
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    offset: self.offset - 1,
+                    v: Operator::Less,
+                })
+            }
+            '>' => {
+                self.eat();
+                Ok(Spanned {
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    offset: self.offset - 1,
+                    v: Operator::More,
+                })
+            }
             c => Err(Spanned {
                 offset: self.offset,
                 len: 1,
@@ -168,7 +193,7 @@ impl Iterator for Lexer<'_>{
                 });
                 Some(t)
             }
-            c if "+-*/".contains(c) => {
+            c if "+-*/<>".contains(c) => {
                 let op = self.lex_operator().map(|t| Spanned {
                     v: Token::Operator(t.v),
                     offset: t.offset,
@@ -193,6 +218,24 @@ impl Iterator for Lexer<'_>{
                     len: 1,
                     line_beginning: self.line_beginning,
                     v: Token::CloseParen,
+                }))
+            }
+            '{' => {
+                self.eat();
+                Some(Ok(Spanned {
+                    offset: self.offset - 1,
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    v: Token::OpenCurly,
+                }))
+            }
+            '}' => {
+                self.eat();
+                Some(Ok(Spanned {
+                    offset: self.offset - 1,
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    v: Token::CloseCurly,
                 }))
             }
             ';' => {
@@ -244,6 +287,24 @@ impl Iterator for Lexer<'_>{
                         len: end - begin,
                         line_beginning: self.line_beginning,
                         v: Token::Keyword(Keyword::Let),
+                    })),
+                    "true" => Some(Ok(Spanned {
+                        offset: begin,
+                        len: end - begin,
+                        line_beginning: self.line_beginning,
+                        v: Token::Keyword(Keyword::True),
+                    })),
+                    "false" => Some(Ok(Spanned {
+                        offset: begin,
+                        len: end - begin,
+                        line_beginning: self.line_beginning,
+                        v: Token::Keyword(Keyword::False),
+                    })),
+                    "if" => Some(Ok(Spanned {
+                        offset: begin,
+                        len: end - begin,
+                        line_beginning: self.line_beginning,
+                        v: Token::Keyword(Keyword::If),
                     })),
                     _ => Some(Ok(Spanned {
                         offset: begin,
