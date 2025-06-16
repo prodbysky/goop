@@ -41,17 +41,29 @@ fn generate_statement(
         }
         parser::Statement::VarAssign { name, t: _, expr } => {
             let value = eval_expr(func, &expr.v, func_temp_count, vars);
-            vars.insert(name.to_string(), value);
+            
+            let var_slot = make_temp(func_temp_count);
+            func.assign_instr(
+                var_slot.clone(),
+                qbe::Type::Long,
+                qbe::Instr::Alloc8(8), 
+            );
+            
+            func.add_instr(qbe::Instr::Store(qbe::Type::Word, var_slot.clone(), value));
+            
+            vars.insert(name.to_string(), var_slot);
         }
         parser::Statement::VarReassign { name, expr } => {
             let value = eval_expr(func, &expr.v, func_temp_count, vars);
-            vars.insert(name.to_string(), value);
+            let var_slot = vars.get(name).unwrap().clone();
+            
+            func.add_instr(qbe::Instr::Store(qbe::Type::Word, var_slot, value));
         }
         parser::Statement::If { cond, body } => {
             let cond = eval_expr(func, &cond.v, func_temp_count, vars);
-            let into = format!("{}", *label_count);
+            let into = format!("l_{}", *label_count);
             *label_count += 1;
-            let skip = format!("{}", *label_count);
+            let skip = format!("l_{}", *label_count);
             *label_count += 1;
             func.add_instr(qbe::Instr::Jnz(cond, into.clone(), skip.clone()));
             func.add_block(into);
@@ -61,19 +73,25 @@ fn generate_statement(
             func.add_block(skip);
         }
         parser::Statement::While { cond, body } => {
-            let header = format!("{}", *label_count);
+            let header = format!("l_{}", *label_count);
             *label_count += 1;
-            let body_l = format!("{}", *label_count);
+            let body_l = format!("l_{}", *label_count);
             *label_count += 1;
-            let exit = format!("{}", *label_count);
+            let exit = format!("l_{}", *label_count);
             *label_count += 1;
-            func.add_block(header);
-            let cond = eval_expr(func, &cond.v, func_temp_count, vars);
-            func.add_instr(qbe::Instr::Jnz(cond, body_l.clone(), exit.clone()));
+            
+            func.add_instr(qbe::Instr::Jmp(header.clone()));
+            
+            func.add_block(header.clone());
+            let cond_val = eval_expr(func, &cond.v, func_temp_count, vars);
+            func.add_instr(qbe::Instr::Jnz(cond_val, body_l.clone(), exit.clone()));
+            
             func.add_block(body_l);
             for st in body {
                 generate_statement(func, func_temp_count, label_count, vars, &st.v);
             }
+            func.add_instr(qbe::Instr::Jmp(header));
+            
             func.add_block(exit);
         }
     }
@@ -85,14 +103,20 @@ fn eval_expr(
     t_count: &mut usize,
     vars: &HashMap<String, qbe::Value>,
 ) -> qbe::Value {
-    fn make_temp(t_count: &mut usize) -> qbe::Value {
-        *t_count += 1;
-        qbe::Value::Temporary(format!("{}", t_count))
-    }
     match e {
         parser::Expression::Integer(i) => qbe::Value::Const(*i),
         parser::Expression::Bool(i) => qbe::Value::Const(*i as u64),
-        parser::Expression::Identifier(i) => vars.get(i).unwrap().clone(),
+        parser::Expression::Identifier(i) => {
+            // Load the value from memory
+            let var_slot = vars.get(i).unwrap().clone();
+            let result = make_temp(t_count);
+            func.assign_instr(
+                result.clone(),
+                qbe::Type::Word,
+                qbe::Instr::Load(qbe::Type::Word, var_slot),
+            );
+            result
+        }
         parser::Expression::Binary { left, op, right } => {
             let left = eval_expr(func, &left.v, t_count, vars);
             let right = eval_expr(func, &right.v, t_count, vars);
@@ -149,4 +173,9 @@ fn eval_expr(
             }
         }
     }
+}
+
+fn make_temp(t_count: &mut usize) -> qbe::Value {
+    *t_count += 1;
+    qbe::Value::Temporary(format!("t_{}", *t_count))
 }
