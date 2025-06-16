@@ -41,6 +41,7 @@ fn get_expr_type(
                 lexer::Operator::Plus
                 | lexer::Operator::Minus
                 | lexer::Operator::Star
+                | lexer::Operator::Percent
                 | lexer::Operator::Slash => match (left, right) {
                     (Type::Int, Type::Int) => Ok(Type::Int),
                     _ => Err(Spanned {

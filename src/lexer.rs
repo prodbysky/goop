@@ -45,6 +45,7 @@ pub enum Operator {
     Minus,
     Star,
     Slash,
+    Percent,
     Less,
     More,
 }
@@ -167,6 +168,15 @@ impl<'a> Lexer<'a> {
                     v: Operator::More,
                 })
             }
+            '%' => {
+                self.eat();
+                Ok(Spanned {
+                    len: 1,
+                    line_beginning: self.line_beginning,
+                    offset: self.offset - 1,
+                    v: Operator::Percent,
+                })
+            }
             c => Err(Spanned {
                 offset: self.offset,
                 len: 1,
@@ -194,7 +204,7 @@ impl Iterator for Lexer<'_> {
                 });
                 Some(t)
             }
-            c if "+-*/<>".contains(c) => {
+            c if "+-*/<>%".contains(c) => {
                 let op = self.lex_operator().map(|t| Spanned {
                     v: Token::Operator(t.v),
                     offset: t.offset,

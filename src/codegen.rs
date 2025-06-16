@@ -170,6 +170,14 @@ fn eval_expr(
                     );
                     result_place
                 }
+                lexer::Operator::Percent => {
+                    func.assign_instr(
+                        result_place.clone(),
+                        qbe::Type::Word,
+                        qbe::Instr::Rem(left, right)
+                    );
+                    result_place
+                }
             }
         }
     }

@@ -188,7 +188,7 @@ impl<'a> Parser<'a> {
 
     fn parse_factor(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         self.parse_expr_help(
-            |t| matches!(t.v, lexer::Token::Operator(lexer::Operator::Slash | lexer::Operator::Star)), 
+            |t| matches!(t.v, lexer::Token::Operator(lexer::Operator::Slash | lexer::Operator::Star | lexer::Operator::Percent)), 
             Parser::parse_primary
         )
     }

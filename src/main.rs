@@ -69,7 +69,6 @@ fn main() {
 
     let pre_cg = std::time::Instant::now();
     let module = codegen::generate_qbe_module(&program);
-    println!("{}", module);
     println!("Code geneneration took: {:.2?}", pre_cg.elapsed());
     if let Err(e) = compile_qbe_module(module, &config.input_name[0..config.input_name.len() - 3]) {
         eprintln!("[{}]\n Failed to compile code module: {e}", "Error".red());
