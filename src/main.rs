@@ -5,6 +5,7 @@ mod type_check;
 mod codegen;
 
 use colored::Colorize;
+use std::io::Write;
 
 fn main() {
     let config = match config::Config::from_args(std::env::args()) {
@@ -74,7 +75,25 @@ fn main() {
     let pre_cg = std::time::Instant::now();
     let module = codegen::generate_qbe_module(&program);
     println!("Code geneneration took: {:.2?}", pre_cg.elapsed());
-    println!("{}", module);
+    match compile_qbe_module(module, &config.input_name[0..config.input_name.len() - 3]) {
+        Err(e) => {
+            eprintln!("[{}]\n Failed to compile code module: {e}", "Error".red());
+        }
+        Ok(()) => {},
+    };
+
+}
+
+fn compile_qbe_module(module: qbe::Module, base_name: &str) -> std::io::Result<()>{
+    let ssa_name = format!("{}.ssa", &base_name);
+    let s_name = format!("{}.s", &base_name);
+    let mut file_ssa = std::io::BufWriter::new(std::fs::OpenOptions::new().create(true).truncate(true).write(true).open(&ssa_name)?);
+    write!(file_ssa, "{}", module)?;
+    drop(file_ssa);
+    std::process::Command::new("qbe").arg(&ssa_name).arg("-o").arg(&s_name).spawn()?.wait()?;
+    std::process::Command::new("gcc").arg(&s_name).arg("-o").arg(base_name).spawn()?.wait()?;
+    std::process::Command::new("rm").arg(&s_name).arg(&ssa_name).spawn()?.wait()?;
+    Ok(())
 }
 
 
