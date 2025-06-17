@@ -5,7 +5,7 @@ mod parser;
 mod type_check;
 
 use colored::Colorize;
-use std::{collections::HashMap, io::Write};
+use std::{collections::{HashMap, HashSet}, io::Write};
 
 fn main() {
     let config = match config::Config::from_args(std::env::args()) {
@@ -82,7 +82,7 @@ fn main() {
                         Value::Const(i) => {temps.insert(*index, *i);}
                         _ => {}
                     }
-                    Instr::BinaryOp { op, l, r, into } => {
+                    Instr::BinaryOp { op, l: Value::Temp(l), r: Value::Temp(r), into } => {
                         match (temps.get(l), temps.get(r)) {
                             (Some(l), Some(r)) => {
                                 let v = match op {
@@ -99,8 +99,8 @@ fn main() {
                                 *i = Instr::Assign { index: *into, v: Value::Const(v) }
                             },
                             _ => {}
-                        };
-                    }
+                        }
+                    },
                     Instr::Return { value } => {
                         match value {
                             Value::Temp(i) => {
@@ -117,6 +117,7 @@ fn main() {
         }
     }
     display_ir(&ir);
+    
 
     // let pre_cg = std::time::Instant::now();
     // let module = codegen::generate_qbe_module(&program);
@@ -128,7 +129,7 @@ fn main() {
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Value {
     Const(u64),
     Temp(ValueIndex)
@@ -137,7 +138,7 @@ enum Value {
 type ValueIndex = usize;
 type LabelIndex = usize;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Instr {
     Assign {
         index: ValueIndex,
@@ -149,8 +150,8 @@ enum Instr {
     },
     BinaryOp {
         op: lexer::Operator,
-        l: ValueIndex,
-        r: ValueIndex,
+        l: Value,
+        r: Value,
         into: ValueIndex
     },
     UnaryOp {
@@ -255,7 +256,7 @@ fn generate_expr(ir: &mut Vec<Instr>, vars: &mut HashMap<String, ValueIndex>, e:
             let left = generate_expr(ir, vars, &left.v, t_count);
             let right = generate_expr(ir, vars, &right.v, t_count);
             let place = alloc_new(t_count);
-            ir.push(Instr::BinaryOp { op: *op, l: left, r: right, into: place });
+            ir.push(Instr::BinaryOp { op: *op, l: Value::Temp(left), r: Value::Temp(right), into: place });
             place
         }
         parser::Expression::Unary { op, right } => {
@@ -274,7 +275,7 @@ fn display_ir(ir: &[Instr]) {
                 println!("Temp[{index}] = {v:?}")
             }
             Instr::BinaryOp { op, l, r, into } => {
-                println!("Temp[{into}] = Temp[{l}] {op:?} Temp[{r}]")
+                println!("Temp[{into}] = {l:?} {op:?} {r:?}")
             }
             Instr::UnaryOp { op, r, into } => {
                 println!("Temp[{into}] = {op:?} Temp[{r}]")
