@@ -80,6 +80,7 @@ fn main() {
                 match i {
                     Instr::Assign { index, v } => match v {
                         Value::Const(i) => {temps.insert(*index, *i);}
+                        _ => {}
                     }
                     Instr::BinaryOp { op, l, r, into } => {
                         match (temps.get(l), temps.get(r)) {
@@ -100,8 +101,14 @@ fn main() {
                             _ => {}
                         };
                     }
-                    Instr::Return { index } => {
-                        if let Some(v) = temps.get(index) {
+                    Instr::Return { value } => {
+                        match value {
+                            Value::Temp(i) => {
+                                if let Some(v) = temps.get(i) {
+                                    *value = Value::Const(*v);
+                                }
+                            }
+                            _ => {}
                         }
                     }
                     _ => {}
@@ -110,7 +117,6 @@ fn main() {
         }
     }
     display_ir(&ir);
-
 
     // let pre_cg = std::time::Instant::now();
     // let module = codegen::generate_qbe_module(&program);
@@ -124,8 +130,8 @@ fn main() {
 
 #[derive(Debug)]
 enum Value {
-    Temp(ValueIndex),
     Const(u64),
+    Temp(ValueIndex)
 }
 
 type ValueIndex = usize;
@@ -134,31 +140,31 @@ type LabelIndex = usize;
 #[derive(Debug)]
 enum Instr {
     Assign {
-        index: Value,
+        index: ValueIndex,
         v: Value
     },
     Reassign {
-        index: Value,
-        new_value_index: Value,
+        index: ValueIndex,
+        new_value_index: ValueIndex,
     },
     BinaryOp {
         op: lexer::Operator,
-        l: Value,
-        r: Value,
-        into: Value
+        l: ValueIndex,
+        r: ValueIndex,
+        into: ValueIndex
     },
     UnaryOp {
         op: lexer::Operator,
-        r: Value,
-        into: Value
+        r: ValueIndex,
+        into: ValueIndex
     },
     Return {
-        index: Value,
+        value: Value,
     },
     Label(LabelIndex),
     Jump(LabelIndex),
     JumpNotZero { 
-        index: Value, 
+        index: ValueIndex, 
         to: LabelIndex,
         otherwise: LabelIndex
     },
@@ -187,7 +193,7 @@ fn generate_statement(ir: &mut Vec<Instr>, vars: &mut HashMap<String, ValueIndex
     match s {
         parser::Statement::Return(v) => {
             let e = generate_expr(ir, vars, &v.v, t_count);
-            ir.push(Instr::Return { index: e });
+            ir.push(Instr::Return { value: Value::Temp(e) });
         }
         parser::Statement::VarAssign { name, t: _, expr } => {
             let e = generate_expr(ir, vars, &expr.v, t_count);
@@ -273,8 +279,8 @@ fn display_ir(ir: &[Instr]) {
             Instr::UnaryOp { op, r, into } => {
                 println!("Temp[{into}] = {op:?} Temp[{r}]")
             }
-            Instr::Return { index } => {
-                println!("Return Temp[{index}]")
+            Instr::Return { value } => {
+                println!("Return {value:?}")
             }
             Instr::Label(l) => {
                 println!("Label[{l}]");
