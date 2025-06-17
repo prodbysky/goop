@@ -68,7 +68,47 @@ fn main() {
     }
 
 
-    let ir = generate_ir(&program);
+    let mut ir = generate_ir(&program);
+
+
+    // const fold experiment
+    {
+        let blocks = ir.split_mut(|t| matches!(t, Instr::Label(_)));
+        for block in blocks {
+            let mut temps: HashMap<ValueIndex, u64>= HashMap::new();  
+            for i in block.iter_mut() {
+                match i {
+                    Instr::Assign { index, v } => match v {
+                        Value::Const(i) => {temps.insert(*index, *i);}
+                    }
+                    Instr::BinaryOp { op, l, r, into } => {
+                        match (temps.get(l), temps.get(r)) {
+                            (Some(l), Some(r)) => {
+                                let v = match op {
+                                    lexer::Operator::Plus => l + r,
+                                    lexer::Operator::Minus => l - r,
+                                    lexer::Operator::Star => l * r,
+                                    lexer::Operator::Slash => l / r,
+                                    lexer::Operator::Percent => l % r,
+                                    lexer::Operator::More => (l > r) as u64,
+                                    lexer::Operator::Less => (l < r) as u64,
+                                    _ => unreachable!()
+                                };
+                                temps.insert(*into, v);
+                                *i = Instr::Assign { index: *into, v: Value::Const(v) }
+                            },
+                            _ => {}
+                        };
+                    }
+                    Instr::Return { index } => {
+                        if let Some(v) = temps.get(index) {
+                        }
+                    }
+                    _ => {}
+                };
+            }
+        }
+    }
     display_ir(&ir);
 
 
@@ -84,7 +124,8 @@ fn main() {
 
 #[derive(Debug)]
 enum Value {
-    Const(u64)
+    Temp(ValueIndex),
+    Const(u64),
 }
 
 type ValueIndex = usize;
@@ -93,31 +134,31 @@ type LabelIndex = usize;
 #[derive(Debug)]
 enum Instr {
     Assign {
-        index: ValueIndex,
+        index: Value,
         v: Value
     },
     Reassign {
-        index: ValueIndex,
-        new_value_index: ValueIndex,
+        index: Value,
+        new_value_index: Value,
     },
     BinaryOp {
         op: lexer::Operator,
-        l: ValueIndex,
-        r: ValueIndex,
-        into: ValueIndex
+        l: Value,
+        r: Value,
+        into: Value
     },
     UnaryOp {
         op: lexer::Operator,
-        r: ValueIndex,
-        into: ValueIndex
+        r: Value,
+        into: Value
     },
     Return {
-        index: ValueIndex,
+        index: Value,
     },
     Label(LabelIndex),
     Jump(LabelIndex),
     JumpNotZero { 
-        index: ValueIndex, 
+        index: Value, 
         to: LabelIndex,
         otherwise: LabelIndex
     },
