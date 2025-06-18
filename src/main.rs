@@ -173,7 +173,6 @@ fn alloc_new(t: &mut usize) -> usize {
 fn optimize_ir(mut ir: Vec<Instr>) -> Vec<Instr>{
     let pre = std::time::Instant::now();
     constant_fold_ir(&mut ir);
-    remove_dead_code(&mut ir);
     println!("[{}]: Optimizations took {:.2?}", "Info".green(), pre.elapsed());
     ir
 }
@@ -222,46 +221,6 @@ fn constant_fold_ir(ir: &mut [Instr]) {
         }
     }
 }
-
-fn remove_dead_code(ir: &mut Vec<Instr>) {
-    let mut used: HashSet<ValueIndex> = HashSet::new();
-    for instr in ir.iter() {
-        match instr {
-            Instr::Assign { v, .. } => {
-                if let Value::Temp(i) = v {
-                    used.insert(*i);
-                }
-            }
-            Instr::BinaryOp { l: Value::Temp(l), r: Value::Temp(r), .. } => {
-                used.insert(*l);
-                used.insert(*r);
-            }
-            Instr::UnaryOp { r, .. } => {
-                used.insert(*r);
-            }
-            Instr::Return { value } => {
-                if let Value::Temp(i) = value {
-                    used.insert(*i);
-                }
-            }
-            Instr::JumpNotZero { index, .. } => {
-                used.insert(*index);
-            }
-            _ => {}
-        }
-    }
-
-    ir.retain(|instr| match instr {
-        Instr::Assign { index, .. } => used.contains(index),
-        Instr::BinaryOp { into, .. } => used.contains(into),
-        Instr::UnaryOp { into, .. } => used.contains(into),
-        Instr::Label(_) => true,
-        Instr::Jump(_) => true,
-        Instr::JumpNotZero { .. } => true,
-        Instr::Return { .. } => true,
-    });
-}
-
 
 fn generate_statement(ir: &mut Vec<Instr>, vars: &mut HashMap<String, ValueIndex>, s: &parser::Statement, t_count: &mut ValueIndex, l_count: &mut LabelIndex) {
     match s {
