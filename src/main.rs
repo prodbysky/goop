@@ -68,56 +68,42 @@ fn main() {
     }
 
 
-    let mut ir = generate_ir(&program);
+    let ir = optimize_ir(generate_ir(&program));
+    display_ir(&ir);
 
+    let mut module = qbe::Module::new();
+    let main = module.add_function(qbe::Function::new(qbe::Linkage::public(), "main", vec![], Some(qbe::Type::Word)));
+    main.add_block("entry");
 
-    // const fold experiment
-    {
-        let blocks = ir.split_mut(|t| matches!(t, Instr::Label(_)));
-        for block in blocks {
-            let mut temps: HashMap<ValueIndex, u64>= HashMap::new();  
-            for i in block.iter_mut() {
-                match i {
-                    Instr::Assign { index, v } => match v {
-                        Value::Const(i) => {temps.insert(*index, *i);}
-                        _ => {}
+    for i in ir {
+        match i {
+            Instr::Assign { index, v } => {
+                let place = qbe::Value::Temporary(format!("{index}_ptr"));
+                main.assign_instr(place.clone(), qbe::Type::Long, qbe::Instr::Alloc8(8));
+                match v {
+                    Value::Const(i) => main.add_instr(qbe::Instr::Store(qbe::Type::Word, place, qbe::Value::Const(i))),
+                    Value::Temp(i) => {
+                        let from = qbe::Value::Temporary(format!("{i}_ptr"));
+                        main.assign_instr(place, qbe::Type::Word, qbe::Instr::Load(qbe::Type::Word, from));
                     }
-                    Instr::BinaryOp { op, l: Value::Temp(l), r: Value::Temp(r), into } => {
-                        match (temps.get(l), temps.get(r)) {
-                            (Some(l), Some(r)) => {
-                                let v = match op {
-                                    lexer::Operator::Plus => l + r,
-                                    lexer::Operator::Minus => l - r,
-                                    lexer::Operator::Star => l * r,
-                                    lexer::Operator::Slash => l / r,
-                                    lexer::Operator::Percent => l % r,
-                                    lexer::Operator::More => (l > r) as u64,
-                                    lexer::Operator::Less => (l < r) as u64,
-                                    _ => unreachable!()
-                                };
-                                temps.insert(*into, v);
-                                *i = Instr::Assign { index: *into, v: Value::Const(v) }
-                            },
-                            _ => {}
-                        }
-                    },
-                    Instr::Return { value } => {
-                        match value {
-                            Value::Temp(i) => {
-                                if let Some(v) = temps.get(i) {
-                                    *value = Value::Const(*v);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ => {}
-                };
+                }
             }
+            Instr::Return { value } => {
+                match value {
+                    Value::Const(i) => main.add_instr(qbe::Instr::Ret(Some(qbe::Value::Const(i)))),
+                    Value::Temp(i) => {
+                        let place = qbe::Value::Temporary(format!("{i}"));
+                        let from = qbe::Value::Temporary(format!("{i}_ptr"));
+                        main.assign_instr(place.clone(), qbe::Type::Word, qbe::Instr::Load(qbe::Type::Word, from));
+                        main.add_instr(qbe::Instr::Ret(Some(place)));
+                    }
+                }
+            }
+            _ => {}
         }
     }
-    display_ir(&ir);
-    
+    println!("{module}");
+
 
     // let pre_cg = std::time::Instant::now();
     // let module = codegen::generate_qbe_module(&program);
@@ -126,8 +112,6 @@ fn main() {
     //     eprintln!("[{}]\n Failed to compile code module: {e}", "Error".red());
     // }
 }
-
-
 
 #[derive(Debug, Clone, Copy)]
 enum Value {
@@ -143,10 +127,6 @@ enum Instr {
     Assign {
         index: ValueIndex,
         v: Value
-    },
-    Reassign {
-        index: ValueIndex,
-        new_value_index: ValueIndex,
     },
     BinaryOp {
         op: lexer::Operator,
@@ -190,6 +170,99 @@ fn alloc_new(t: &mut usize) -> usize {
     *t - 1
 }
 
+fn optimize_ir(mut ir: Vec<Instr>) -> Vec<Instr>{
+    let pre = std::time::Instant::now();
+    constant_fold_ir(&mut ir);
+    remove_dead_code(&mut ir);
+    println!("[{}]: Optimizations took {:.2?}", "Info".green(), pre.elapsed());
+    ir
+}
+
+fn constant_fold_ir(ir: &mut [Instr]) {
+    let blocks = ir.split_mut(|t| matches!(t, Instr::Label(_)));
+    for block in blocks {
+        let mut temps: HashMap<ValueIndex, u64>= HashMap::new();  
+        for i in block.iter_mut() {
+            match i {
+                Instr::Assign { index, v } => match v {
+                    Value::Const(i) => {temps.insert(*index, *i);}
+                    _ => {}
+                }
+                Instr::BinaryOp { op, l: Value::Temp(l), r: Value::Temp(r), into } => {
+                    match (temps.get(l), temps.get(r)) {
+                        (Some(l), Some(r)) => {
+                            let v = match op {
+                                lexer::Operator::Plus => l + r,
+                                lexer::Operator::Minus => l - r,
+                                lexer::Operator::Star => l * r,
+                                lexer::Operator::Slash => l / r,
+                                lexer::Operator::Percent => l % r,
+                                lexer::Operator::More => (l > r) as u64,
+                                lexer::Operator::Less => (l < r) as u64,
+                                _ => unreachable!()
+                            };
+                            temps.insert(*into, v);
+                            *i = Instr::Assign { index: *into, v: Value::Const(v) }
+                        },
+                        _ => {}
+                    }
+                },
+                Instr::Return { value } => {
+                    match value {
+                        Value::Temp(i) => {
+                            if let Some(v) = temps.get(i) {
+                                *value = Value::Const(*v);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            };
+        }
+    }
+}
+
+fn remove_dead_code(ir: &mut Vec<Instr>) {
+    let mut used: HashSet<ValueIndex> = HashSet::new();
+    for instr in ir.iter() {
+        match instr {
+            Instr::Assign { v, .. } => {
+                if let Value::Temp(i) = v {
+                    used.insert(*i);
+                }
+            }
+            Instr::BinaryOp { l: Value::Temp(l), r: Value::Temp(r), .. } => {
+                used.insert(*l);
+                used.insert(*r);
+            }
+            Instr::UnaryOp { r, .. } => {
+                used.insert(*r);
+            }
+            Instr::Return { value } => {
+                if let Value::Temp(i) = value {
+                    used.insert(*i);
+                }
+            }
+            Instr::JumpNotZero { index, .. } => {
+                used.insert(*index);
+            }
+            _ => {}
+        }
+    }
+
+    ir.retain(|instr| match instr {
+        Instr::Assign { index, .. } => used.contains(index),
+        Instr::BinaryOp { into, .. } => used.contains(into),
+        Instr::UnaryOp { into, .. } => used.contains(into),
+        Instr::Label(_) => true,
+        Instr::Jump(_) => true,
+        Instr::JumpNotZero { .. } => true,
+        Instr::Return { .. } => true,
+    });
+}
+
+
 fn generate_statement(ir: &mut Vec<Instr>, vars: &mut HashMap<String, ValueIndex>, s: &parser::Statement, t_count: &mut ValueIndex, l_count: &mut LabelIndex) {
     match s {
         parser::Statement::Return(v) => {
@@ -216,9 +289,8 @@ fn generate_statement(ir: &mut Vec<Instr>, vars: &mut HashMap<String, ValueIndex
             ir.push(Instr::Label(over));
         }
         parser::Statement::VarReassign { name, expr } => {
-            let index = *vars.get(name).unwrap();
             let new = generate_expr(ir, vars, &expr.v, t_count);
-            ir.push(Instr::Reassign { index, new_value_index: new });
+            vars.insert(name.to_string(), new);
         }
         parser::Statement::While { cond, body } => {
             let header_idx = alloc_new(l_count);
@@ -289,7 +361,10 @@ fn display_ir(ir: &[Instr]) {
             Instr::JumpNotZero { index, to, otherwise} => {
                 println!("JumpNotZero Label[{to}] else Label[{otherwise}] Temp[{index}]");
             }
-            r => todo!("{r:?}")
+            Instr::Jump(i) => {
+                println!("Jump Label[{i}]");
+
+            }
         }
     }
 }
