@@ -1,11 +1,9 @@
-mod codegen;
 mod config;
 mod lexer;
 mod parser;
 mod type_check;
-
 use colored::Colorize;
-use std::{collections::{HashMap, HashSet}, io::Write};
+use std::collections::HashMap;
 
 fn main() {
     let config = match config::Config::from_args(std::env::args()) {
@@ -275,6 +273,11 @@ fn generate_expr(ir: &mut Vec<Instr>, vars: &mut HashMap<String, ValueIndex>, e:
             ir.push(Instr::Assign { index: place, v: Value::Const(*i) });
             place
         }
+        parser::Expression::Char(i) => {
+            let place = alloc_new(t_count);
+            ir.push(Instr::Assign { index: place, v: Value::Const(*i as u64) });
+            place
+        }
         parser::Expression::Bool(b) => {
             let place = alloc_new(t_count);
             ir.push(Instr::Assign { index: place, v: Value::Const(*b as u64) });
@@ -326,40 +329,6 @@ fn display_ir(ir: &[Instr]) {
             }
         }
     }
-}
-
-fn compile_qbe_module(module: qbe::Module, base_name: &str) -> std::io::Result<()> {
-    let pre = std::time::Instant::now();
-    let ssa_name = format!("{}.ssa", &base_name);
-    let s_name = format!("{}.s", &base_name);
-    let mut file_ssa = std::io::BufWriter::new(
-        std::fs::OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(&ssa_name)?,
-    );
-    write!(file_ssa, "{}", module)?;
-    drop(file_ssa);
-    std::process::Command::new("qbe")
-        .arg(&ssa_name)
-        .arg("-o")
-        .arg(&s_name)
-        .spawn()?
-        .wait()?;
-    std::process::Command::new("gcc")
-        .arg(&s_name)
-        .arg("-o")
-        .arg(base_name)
-        .spawn()?
-        .wait()?;
-    println!("[{}]: Compilation took {:.2?}", "Info".green(), pre.elapsed());
-    std::process::Command::new("rm")
-        .arg(&s_name)
-        .arg(&ssa_name)
-        .spawn()?
-        .wait()?;
-    Ok(())
 }
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {

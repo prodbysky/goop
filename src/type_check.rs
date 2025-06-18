@@ -8,6 +8,7 @@ use std::collections::HashMap;
 pub enum Type {
     Int,
     Bool,
+    Char,
 }
 
 pub fn type_from_type_name(name: &str) -> Type {
@@ -16,6 +17,9 @@ pub fn type_from_type_name(name: &str) -> Type {
     }
     if name == "bool" {
         return Type::Bool;
+    }
+    if name == "char" {
+        return Type::Char;
     }
     todo!()
 }
@@ -35,6 +39,7 @@ fn get_expr_type(
     match &e.v {
         parser::Expression::Integer(_) => Ok(Type::Int),
         parser::Expression::Bool(_) => Ok(Type::Bool),
+        parser::Expression::Char(_) => Ok(Type::Char),
         parser::Expression::Unary { op, right } => {
             let right_type = get_expr_type(right, vars)?;
             match (op, right_type) {
@@ -56,6 +61,8 @@ fn get_expr_type(
                 | lexer::Operator::Percent
                 | lexer::Operator::Slash => match (left, right) {
                     (Type::Int, Type::Int) => Ok(Type::Int),
+                    (Type::Char, Type::Int) => Ok(Type::Char),
+                    (Type::Int, Type::Char) => Ok(Type::Int),
                     _ => Err(Spanned {
                         offset: e.offset,
                         len: e.len,
@@ -65,6 +72,7 @@ fn get_expr_type(
                 },
                 lexer::Operator::Less | lexer::Operator::More => match (left, right) {
                     (Type::Int, Type::Int) => Ok(Type::Bool),
+                    (Type::Char, Type::Char) => Ok(Type::Bool),
                     _ => Err(Spanned {
                         offset: e.offset,
                         len: e.len,
@@ -138,7 +146,8 @@ fn type_check_statement(
         parser::Statement::If { cond, body } | parser::Statement::While { cond, body } => {
             let cond_type = get_expr_type(cond, vars)?;
             match cond_type {
-                Type::Int => {
+                Type::Bool => {}
+                _ => {
                     return Err(Spanned {
                         offset: cond.offset,
                         len: cond.len,
@@ -146,7 +155,6 @@ fn type_check_statement(
                         v: TypeError::NonBoolIfCond,
                     });
                 }
-                Type::Bool => {}
             };
             for s in body {
                 type_check_statement(s, vars)?;

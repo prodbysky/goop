@@ -18,6 +18,7 @@ pub enum Error {
 pub enum Token {
     Integer(u64),
     Operator(Operator),
+    Char(char),
     Keyword(Keyword),
     Identifier(String),
     OpenParen,
@@ -175,7 +176,6 @@ impl<'a> Lexer<'a> {
                     v: Operator::Not,
                 })
             }
-
             c => Err(Spanned {
                 offset: self.offset,
                 len: 1,
@@ -286,6 +286,20 @@ impl Iterator for Lexer<'_> {
                     len: 1,
                     line_beginning: self.line_beginning,
                     v: Token::Assign,
+                }))
+            }
+            '\'' => {
+                let begin = self.offset;
+                let begin_line = self.line_beginning;
+                self.eat().unwrap();
+                let c = *self.eat().unwrap();
+                let end_c = *self.eat().unwrap();
+                assert!(end_c == '\'');
+                Some(Ok(Spanned { 
+                    offset: begin, 
+                    len: 3, 
+                    line_beginning: begin_line, 
+                    v: Token::Char(c) 
                 }))
             }
             'a'..='z' | 'A'..='Z' => {

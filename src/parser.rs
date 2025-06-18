@@ -204,9 +204,9 @@ impl<'a> Parser<'a> {
             };
             let right = self.parse_unary()?;
             return Ok(Spanned {
-                offset: offset,
+                offset,
                 len: right.offset - offset,
-                line_beginning: line_beginning,
+                line_beginning,
                 v: Expression::Unary { op, right: Box::new(right) }
             });
         }
@@ -227,6 +227,21 @@ impl<'a> Parser<'a> {
                     len: *len,
                     line_beginning: *line_beginning,
                     v: Expression::Integer(*n),
+                });
+                self.eat();
+                r
+            }
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: lexer::Token::Char(n),
+            }) => {
+                let r = Ok(Spanned {
+                    offset: *offset,
+                    len: *len,
+                    line_beginning: *line_beginning,
+                    v: Expression::Char(*n),
                 });
                 self.eat();
                 r
@@ -430,6 +445,7 @@ impl std::fmt::Display for Error {
 #[derive(Debug, Clone)]
 pub enum Expression {
     Integer(u64),
+    Char(char),
     Bool(bool),
     Identifier(String),
     Binary {
