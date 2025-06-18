@@ -181,7 +181,7 @@ fn constant_fold_ir(ir: &mut [Instr]) {
         let mut temps: HashMap<ValueIndex, u64>= HashMap::new();  
         for i in block.iter_mut() {
             match i {
-                Instr::Assign { index, v } => if let Value::Const(i) = v {temps.insert(*index, *i);}
+                Instr::Assign { index, v: Value::Const(i) } => {temps.insert(*index, *i);}
                 Instr::BinaryOp { op, l: Value::Temp(l), r: Value::Temp(r), into } => {
                     if let (Some(l), Some(r)) = (temps.get(l), temps.get(r)) {
                         let v = match op {
