@@ -181,37 +181,28 @@ fn constant_fold_ir(ir: &mut [Instr]) {
         let mut temps: HashMap<ValueIndex, u64>= HashMap::new();  
         for i in block.iter_mut() {
             match i {
-                Instr::Assign { index, v } => match v {
-                    Value::Const(i) => {temps.insert(*index, *i);}
-                    _ => {}
-                }
+                Instr::Assign { index, v } => if let Value::Const(i) = v {temps.insert(*index, *i);}
                 Instr::BinaryOp { op, l: Value::Temp(l), r: Value::Temp(r), into } => {
-                    match (temps.get(l), temps.get(r)) {
-                        (Some(l), Some(r)) => {
-                            let v = match op {
-                                lexer::Operator::Plus => l + r,
-                                lexer::Operator::Minus => l - r,
-                                lexer::Operator::Star => l * r,
-                                lexer::Operator::Slash => l / r,
-                                lexer::Operator::Percent => l % r,
-                                lexer::Operator::More => (l > r) as u64,
-                                lexer::Operator::Less => (l < r) as u64,
-                                _ => unreachable!()
-                            };
-                            temps.insert(*into, v);
-                            *i = Instr::Assign { index: *into, v: Value::Const(v) }
-                        },
-                        _ => {}
+                    if let (Some(l), Some(r)) = (temps.get(l), temps.get(r)) {
+                        let v = match op {
+                            lexer::Operator::Plus => l + r,
+                            lexer::Operator::Minus => l - r,
+                            lexer::Operator::Star => l * r,
+                            lexer::Operator::Slash => l / r,
+                            lexer::Operator::Percent => l % r,
+                            lexer::Operator::More => (l > r) as u64,
+                            lexer::Operator::Less => (l < r) as u64,
+                            _ => unreachable!()
+                        };
+                        temps.insert(*into, v);
+                        *i = Instr::Assign { index: *into, v: Value::Const(v) }
                     }
                 },
                 Instr::Return { value } => {
-                    match value {
-                        Value::Temp(i) => {
-                            if let Some(v) = temps.get(i) {
-                                *value = Value::Const(*v);
-                            }
+                    if let Value::Temp(i) = value {
+                        if let Some(v) = temps.get(i) {
+                            *value = Value::Const(*v);
                         }
-                        _ => {}
                     }
                 }
                 _ => {}
