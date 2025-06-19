@@ -2,7 +2,7 @@ use colored::Colorize;
 
 pub struct Config {
     pub program_name: String,
-    pub input_name: String,
+    pub input_name: std::path::PathBuf,
 }
 
 impl Config {
@@ -32,7 +32,7 @@ impl Config {
         }
 
         Some(Self {
-            input_name: input_name.unwrap().to_string(),
+            input_name: input_name.unwrap().to_string().into(),
             program_name,
         })
     }
