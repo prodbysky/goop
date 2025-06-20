@@ -13,6 +13,7 @@ impl Module {
         for node in ast {
             main.add_statement(&node.v)?;
         }
+        dbg!(main);
         Ok(s)
     }
 
@@ -27,7 +28,6 @@ impl Module {
 }
 
 impl Function {
-
     pub fn add_statement(&mut self, s: &parser::Statement) -> Result<(), Error> {
         use parser::Statement as s;
         match &s {
@@ -49,11 +49,9 @@ impl Function {
                 let over = self.alloc_label();
                 self.add_instr(Instr::JumpNotZero { cond: Value::Temp(v), to: into, otherwise: over })?;
                 self.add_instr(Instr::Label(into))?;
-                let pre = self.push_scope();
                 for s in body {
                     self.add_statement(&s.v)?;
                 }
-                self.pop_scope(pre);
                 self.add_instr(Instr::Label(over))?;
             }
             s::While { cond, body: b } => {
@@ -67,11 +65,9 @@ impl Function {
 
                 self.add_instr(Instr::Label(body))?;
 
-                let pre = self.push_scope();
                 for s in b {
                     self.add_statement(&s.v)?;
                 }
-                self.pop_scope(pre);
                 self.add_instr(Instr::Jump(header))?;
                 self.add_instr(Instr::Label(over))?;
             }
@@ -208,13 +204,6 @@ impl Function {
     fn alloc_label(&mut self) -> LabelIndex {
         self.max_labels += 1;
         self.max_labels - 1
-    }
-
-    fn push_scope(&mut self) -> usize {
-        self.max_temps
-    }
-    fn pop_scope(&mut self, pre: usize) {
-        self.max_temps = pre;
     }
 }
 
