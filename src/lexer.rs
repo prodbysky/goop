@@ -49,7 +49,7 @@ pub enum Operator {
     Percent,
     Less,
     More,
-    Not
+    Not,
 }
 
 impl<'a> Lexer<'a> {
@@ -295,11 +295,11 @@ impl Iterator for Lexer<'_> {
                 let c = *self.eat().unwrap();
                 let end_c = *self.eat().unwrap();
                 assert!(end_c == '\'');
-                Some(Ok(Spanned { 
-                    offset: begin, 
-                    len: 3, 
-                    line_beginning: begin_line, 
-                    v: Token::Char(c) 
+                Some(Ok(Spanned {
+                    offset: begin,
+                    len: 3,
+                    line_beginning: begin_line,
+                    v: Token::Char(c),
                 }))
             }
             'a'..='z' | 'A'..='Z' => {

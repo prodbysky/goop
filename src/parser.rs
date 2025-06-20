@@ -1,4 +1,3 @@
-
 use crate::{Spanned, lexer};
 use colored::Colorize;
 
@@ -53,7 +52,7 @@ impl<'a> Parser<'a> {
                 lexer::Keyword::Return => {
                     self.eat();
                     let expr = self.parse_expression()?;
-                    let semicolon = self.eat().unwrap();
+                    let semicolon = self.expect(&lexer::Token::Semicolon)?;
                     Ok(Spanned {
                         offset,
                         len: semicolon.offset - offset,
@@ -72,8 +71,8 @@ impl<'a> Parser<'a> {
                             return Err(self.error_from_last_tk(Error::ExpectedIdentifier));
                         }
                     };
-                    self.eat(); // ident
-                    self.eat(); // colon
+                    self.expect(&lexer::Token::Identifier("".to_string()))?;
+                    self.expect(&lexer::Token::Colon)?;
                     let type_name = match self.current().cloned() {
                         Some(Spanned {
                             v: lexer::Token::Identifier(ident),
@@ -84,7 +83,7 @@ impl<'a> Parser<'a> {
                         }
                     };
                     self.eat();
-                    self.eat(); // eq
+                    self.expect(&lexer::Token::Assign)?;
                     let expr = self.parse_expression()?;
                     let e = self.eat().unwrap();
                     Ok(Spanned {
@@ -101,7 +100,7 @@ impl<'a> Parser<'a> {
                 lexer::Keyword::If => {
                     let begin = self.eat().unwrap();
                     let expr = self.parse_expression()?;
-                    self.eat();
+                    self.expect(&lexer::Token::OpenCurly)?;
                     let mut body = vec![];
                     while self
                         .current()
@@ -109,7 +108,7 @@ impl<'a> Parser<'a> {
                     {
                         body.push(self.parse_statement()?);
                     }
-                    let end = self.eat().unwrap();
+                    let end = self.expect(&lexer::Token::CloseCurly)?;
                     Ok(Spanned {
                         offset: begin.offset,
                         len: end.offset - begin.offset,
@@ -120,7 +119,7 @@ impl<'a> Parser<'a> {
                 lexer::Keyword::While => {
                     let begin = self.eat().unwrap();
                     let expr = self.parse_expression()?;
-                    self.eat();
+                    self.expect(&lexer::Token::OpenCurly)?;
                     let mut body = vec![];
                     while self
                         .current()
@@ -128,23 +127,32 @@ impl<'a> Parser<'a> {
                     {
                         body.push(self.parse_statement()?);
                     }
-                    let end = self.eat().unwrap();
+                    let end = self.expect(&lexer::Token::CloseCurly)?;
                     Ok(Spanned {
                         offset: begin.offset,
                         len: end.offset - begin.offset,
                         line_beginning: begin.line_beginning,
                         v: Statement::While { cond: expr, body },
                     })
-
                 }
                 lexer::Keyword::True | lexer::Keyword::False => unreachable!(),
             },
-            Some(Spanned { offset, len: _, line_beginning, v: lexer::Token::Identifier(name)}) => {
+            Some(Spanned {
+                offset,
+                len: _,
+                line_beginning,
+                v: lexer::Token::Identifier(name),
+            }) => {
                 self.eat().unwrap(); // var reassign
-                self.eat().unwrap(); // =
+                self.expect(&lexer::Token::Assign)?;
                 let value = self.parse_expression()?;
-                let end = self.eat().unwrap(); // ;
-                Ok(Spanned { offset, len: end.offset - offset, line_beginning, v: Statement::VarReassign { name, expr: value } })
+                let end = self.expect(&lexer::Token::Semicolon)?;
+                Ok(Spanned {
+                    offset,
+                    len: end.offset - offset,
+                    line_beginning,
+                    v: Statement::VarReassign { name, expr: value },
+                })
             }
 
             None => unreachable!(),
@@ -166,48 +174,89 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn expect(&mut self, t: &lexer::Token) -> Result<Spanned<lexer::Token>, Spanned<Error>> {
+        match self.eat() {
+            Some(x) => {
+                if std::mem::discriminant(&x.v) == std::mem::discriminant(t) {
+                    Ok(x)
+                } else {
+                    Err(self.error_from_last_tk(Error::UnexpectedToken))
+                }
+            }
+            None => Err(self.error_from_last_tk(Error::UnexpectedToken)),
+        }
+    }
+
     // https://craftinginterpreters.com/parsing-expressions.html
     fn parse_expression(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         self.parse_comparison()
     }
 
-
     // hell yeah
     fn parse_comparison(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         self.parse_expr_help(
-            |t| matches!(t.v, lexer::Token::Operator(lexer::Operator::Less | lexer::Operator::More)), 
-            Parser::parse_term
+            |t| {
+                matches!(
+                    t.v,
+                    lexer::Token::Operator(lexer::Operator::Less | lexer::Operator::More)
+                )
+            },
+            Parser::parse_term,
         )
     }
 
     fn parse_term(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         self.parse_expr_help(
-            |t| matches!(t.v, lexer::Token::Operator(lexer::Operator::Plus | lexer::Operator::Minus)), 
-            Parser::parse_factor
+            |t| {
+                matches!(
+                    t.v,
+                    lexer::Token::Operator(lexer::Operator::Plus | lexer::Operator::Minus)
+                )
+            },
+            Parser::parse_factor,
         )
     }
 
     fn parse_factor(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         self.parse_expr_help(
-            |t| matches!(t.v, lexer::Token::Operator(lexer::Operator::Slash | lexer::Operator::Star | lexer::Operator::Percent)), 
-            Parser::parse_unary
+            |t| {
+                matches!(
+                    t.v,
+                    lexer::Token::Operator(
+                        lexer::Operator::Slash | lexer::Operator::Star | lexer::Operator::Percent
+                    )
+                )
+            },
+            Parser::parse_unary,
         )
     }
 
     fn parse_unary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        if matches!(self.current(), Some(Spanned { v: lexer::Token::Operator(lexer::Operator::Not | lexer::Operator::Minus), ..})) {
+        if matches!(
+            self.current(),
+            Some(Spanned {
+                v: lexer::Token::Operator(lexer::Operator::Not | lexer::Operator::Minus),
+                ..
+            })
+        ) {
             let (offset, _len, line_beginning, op) = match self.eat().unwrap() {
-                Spanned { offset, len, line_beginning, v: lexer::Token::Operator(a @(lexer::Operator::Not | lexer::Operator::Minus))} => {
-                    (offset, len, line_beginning, a)
-                },
-                _ => unreachable!()
+                Spanned {
+                    offset,
+                    len,
+                    line_beginning,
+                    v: lexer::Token::Operator(a @ (lexer::Operator::Not | lexer::Operator::Minus)),
+                } => (offset, len, line_beginning, a),
+                _ => unreachable!(),
             };
             let right = self.parse_unary()?;
             return Ok(Spanned {
                 offset,
                 len: right.offset - offset,
                 line_beginning,
-                v: Expression::Unary { op, right: Box::new(right) }
+                v: Expression::Unary {
+                    op,
+                    right: Box::new(right),
+                },
             });
         }
         self.parse_primary()
@@ -335,7 +384,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expr_help(&mut self, cond: fn(&Spanned<lexer::Token>) -> bool, lower_element: fn(&mut Parser<'a>) -> Result<Spanned<Expression>, Spanned<Error>>) -> Result<Spanned<Expression>, Spanned<Error>> {
+    fn parse_expr_help(
+        &mut self,
+        cond: fn(&Spanned<lexer::Token>) -> bool,
+        lower_element: fn(&mut Parser<'a>) -> Result<Spanned<Expression>, Spanned<Error>>,
+    ) -> Result<Spanned<Expression>, Spanned<Error>> {
         let mut left = lower_element(self)?;
 
         while self.current().is_some_and(cond) {
@@ -363,7 +416,6 @@ impl<'a> Parser<'a> {
         }
 
         Ok(left)
-
     }
 
     fn current(&self) -> Option<&Spanned<lexer::Token>> {
@@ -455,8 +507,8 @@ pub enum Expression {
     },
     Unary {
         op: lexer::Operator,
-        right: Box<Spanned<Expression>>
-    }
+        right: Box<Spanned<Expression>>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -478,5 +530,5 @@ pub enum Statement {
     While {
         cond: Spanned<Expression>,
         body: Vec<Spanned<Statement>>,
-    }
+    },
 }

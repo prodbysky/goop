@@ -44,13 +44,14 @@ fn get_expr_type(
         parser::Expression::Unary { op, right } => {
             let right_type = get_expr_type(right, vars)?;
             match (op, right_type) {
-                (lexer::Operator::Minus, Type::Int) => {
-                    Ok(Type::Int)
-                },
-                (lexer::Operator::Not, Type::Bool) => {
-                    Ok(Type::Bool)
-                },
-                _ => Err(Spanned { offset: right.offset, len: right.len, line_beginning: right.line_beginning, v: TypeError::TypeMismatch })
+                (lexer::Operator::Minus, Type::Int) => Ok(Type::Int),
+                (lexer::Operator::Not, Type::Bool) => Ok(Type::Bool),
+                _ => Err(Spanned {
+                    offset: right.offset,
+                    len: right.len,
+                    line_beginning: right.line_beginning,
+                    v: TypeError::TypeMismatch,
+                }),
             }
         }
         parser::Expression::Binary { left, op, right } => {
@@ -81,7 +82,7 @@ fn get_expr_type(
                         v: TypeError::BoolBinaryOp,
                     }),
                 },
-                lexer::Operator::Not => unreachable!()
+                lexer::Operator::Not => unreachable!(),
             }
         }
         parser::Expression::Identifier(ident) => match vars.get(ident) {
@@ -115,8 +116,12 @@ fn type_check_statement(
     match &s.v {
         parser::Statement::VarAssign { name, t, expr } => {
             if vars.get(name).is_some() {
-                return Err(Spanned { offset: s.offset, len: s.len, line_beginning: s.line_beginning, v: TypeError::BindingRedefinition });
-
+                return Err(Spanned {
+                    offset: s.offset,
+                    len: s.len,
+                    line_beginning: s.line_beginning,
+                    v: TypeError::BindingRedefinition,
+                });
             }
             let expr_type = get_expr_type(expr, vars)?;
             let expected = type_from_type_name(t);
@@ -132,10 +137,15 @@ fn type_check_statement(
         }
         parser::Statement::VarReassign { name, expr } => {
             if vars.get(name).is_none() {
-                return Err(Spanned { offset: s.offset, len: s.len, line_beginning: s.line_beginning, v: TypeError::UndefinedBinding });
+                return Err(Spanned {
+                    offset: s.offset,
+                    len: s.len,
+                    line_beginning: s.line_beginning,
+                    v: TypeError::UndefinedBinding,
+                });
             }
             let expr_type = get_expr_type(expr, vars)?;
-                if expr_type != *vars.get(name).unwrap() {
+            if expr_type != *vars.get(name).unwrap() {
                 return Err(Spanned {
                     offset: s.offset,
                     len: s.len,
@@ -189,7 +199,11 @@ impl std::fmt::Display for TypeError {
                 write!(f, "[{}]\n Maybe you have misspeled it?", "Note".green())
             }
             Self::BindingRedefinition => {
-                writeln!(f, "[{}]\n Found an attempt to redefine a binding", "Error".red())?;
+                writeln!(
+                    f,
+                    "[{}]\n Found an attempt to redefine a binding",
+                    "Error".red()
+                )?;
                 write!(f, "[{}]\n Maybe you meant to reassign it?", "Note".green())
             }
             Self::BoolBinaryOp => {
