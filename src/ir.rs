@@ -1,5 +1,5 @@
 use crate::{lexer, parser, Spanned};
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 
 impl Module {
@@ -8,52 +8,13 @@ impl Module {
     }
 
     pub fn from_ast(mut self, ast: &[Spanned<parser::Statement>]) -> Result<Self, Error>{
-        use parser::Statement as s;
         let main = self.add_function("main".to_string());
         for node in ast {
-            match &node.v {
-                s::Return(i) => {
-                }
-                _ => todo!()
-            }
+            main.add_statement(&node.v)?;
         }
         Ok(self)
     }
 
-    fn gen_expr(&mut self, f: &mut Function, e: &parser::Expression) -> Result<ValueIndex, Error>{
-        match e {
-            parser::Expression::Integer(i) => {
-                let place = f.alloc_temp();
-                f.add_instr(Instr::Assign { index: place, v: Value::Const(*i) })?;
-                Ok(place)
-            }
-            parser::Expression::Bool(i) => {
-                let place = f.alloc_temp();
-                f.add_instr(Instr::Assign { index: place, v: Value::Const(*i as u64) })?;
-                Ok(place)
-            }
-            parser::Expression::Char(i) => {
-                let place = f.alloc_temp();
-                f.add_instr(Instr::Assign { index: place, v: Value::Const(*i as u64) })?;
-                Ok(place)
-            }
-            parser::Expression::Identifier(i) => {
-                Ok(*f.vars.get(i).unwrap())
-            }
-            parser::Expression::Binary { left, op, right } => {
-                let l = self.gen_expr(f, &left.v)?;
-                let r = self.gen_expr(f, &right.v)?;
-                let place = f.alloc_temp();
-
-                match op {
-                    lexer::Operator::Plus => {
-                        f.a
-
-                    }
-                }
-            }
-        }
-    }
 
     fn add_function(&mut self, name: String) -> &mut Function {
         self.functions.push(Function { name, instructions: vec![], max_temps: 0, max_labels: 0, vars: HashMap::new() });
@@ -62,14 +23,112 @@ impl Module {
 }
 
 impl Function {
-    pub fn alloc_temp(&mut self) -> ValueIndex {
+    fn alloc_temp(&mut self) -> ValueIndex {
         self.max_temps += 1;
         self.max_temps - 1
     }
-    pub fn alloc_label(&mut self) -> LabelIndex {
+    fn alloc_label(&mut self) -> LabelIndex {
         self.max_labels += 1;
         self.max_labels - 1
     }
+
+    fn push_scope(&mut self) -> usize {
+        self.max_temps
+    }
+    fn pop_scope(&mut self, pre: usize) {
+        self.max_temps = pre;
+    }
+
+
+    pub fn add_statement(&mut self, s: &parser::Statement) -> Result<(), Error> {
+        use parser::Statement as s;
+        match &s {
+            s::Return(i) => {
+                let v = self.add_expr(&i.v)?;
+                self.add_instr(Instr::Return { value: Value::Temp(v) })?;
+            }
+            s::VarAssign { name, t: _, expr } => {
+                let v = self.add_expr(&expr.v)?;
+                self.vars.insert(name.to_string(), v);
+            }
+            s::VarReassign { name, expr } => {
+                let v = self.add_expr(&expr.v)?;
+                self.vars.insert(name.to_string(), v);
+            }
+            s::If { cond, body } => {
+                let v = self.add_expr(&cond.v)?;
+                let into = self.alloc_label();
+                let over = self.alloc_label();
+                self.add_instr(Instr::JumpNotZero { cond: Value::Temp(v), to: into, otherwise: over })?;
+                self.add_instr(Instr::Label(into))?;
+                let pre = self.push_scope();
+                for s in body {
+                    self.add_statement(&s.v)?;
+                }
+                self.pop_scope(pre);
+                self.add_instr(Instr::Label(over))?;
+            }
+            s::While { cond, body: b } => {
+                let header = self.alloc_label(); 
+                let body = self.alloc_label(); 
+                let over = self.alloc_label(); 
+
+                self.add_instr(Instr::Label(header))?;
+                let v = self.add_expr(&cond.v)?;
+                self.add_instr(Instr::JumpNotZero { cond: Value::Temp(v), to: body, otherwise: over })?;
+
+                self.add_instr(Instr::Label(body))?;
+
+                let pre = self.push_scope();
+                for s in b {
+                    self.add_statement(&s.v)?;
+                }
+                self.pop_scope(pre);
+                self.add_instr(Instr::Jump(header))?;
+                self.add_instr(Instr::Label(over))?;
+            }
+        }
+        Ok(())
+
+    }
+    
+    pub fn add_expr(&mut self, e: &parser::Expression) -> Result<ValueIndex, Error> {
+        match e {
+            parser::Expression::Integer(i) => {
+                let place = self.alloc_temp();
+                self.add_instr(Instr::Assign { index: place, v: Value::Const(*i) })?;
+                Ok(place)
+            }
+            parser::Expression::Bool(i) => {
+                let place = self.alloc_temp();
+                self.add_instr(Instr::Assign { index: place, v: Value::Const(*i as u64) })?;
+                Ok(place)
+            }
+            parser::Expression::Char(i) => {
+                let place = self.alloc_temp();
+                self.add_instr(Instr::Assign { index: place, v: Value::Const(*i as u64) })?;
+                Ok(place)
+            }
+            parser::Expression::Identifier(i) => {
+                Ok(*self.vars.get(i).unwrap())
+            }
+            parser::Expression::Binary { left, op, right } => {
+                let l = self.add_expr(&left.v)?;
+                let r = self.add_expr(&right.v)?;
+                let place = self.alloc_temp();
+                self.add_instr(Instr::BinaryOp { op: *op, l: Value::Temp(l), r: Value::Temp(r), into: place })?;
+                Ok(place)
+            }
+            parser::Expression::Unary { op, right } => {
+                let r = self.add_expr(&right.v)?;
+                let place = self.alloc_temp();
+                self.add_instr(Instr::UnaryOp { op: *op, r: Value::Temp(r), into: place })?;
+                Ok(place)
+            }
+        }
+
+    }
+
     pub fn add_instr(&mut self, i: Instr) -> Result<(), Error> {
         match i {
             Instr::Assign { index: idx, .. } => {
@@ -133,15 +192,9 @@ impl Function {
     }
 }
 
-pub enum Error {
-    InvalidValueIndex {
-        max: ValueIndex,
-        got: ValueIndex,
-    },
-    InvalidLabel {
-        max: LabelIndex,
-        got: LabelIndex,
-    }
+#[derive(Debug)]
+pub struct Module {
+    functions: Vec<Function>
 }
 
 #[derive(Debug, Clone, Default)]
@@ -152,15 +205,6 @@ pub struct Function {
     max_labels: usize,
     max_temps: usize
 }
-
-#[derive(Debug, Clone, Copy)]
-pub enum Value {
-    Const(u64),
-    Temp(ValueIndex)
-}
-
-pub type ValueIndex = usize;
-pub type LabelIndex = usize;
 
 #[derive(Debug, Clone)]
 pub enum Instr {
@@ -191,8 +235,27 @@ pub enum Instr {
     },
 }
 
+
+#[derive(Debug)]
+pub enum Error {
+    InvalidValueIndex {
+        max: ValueIndex,
+        got: ValueIndex,
+    },
+    InvalidLabel {
+        max: LabelIndex,
+        got: LabelIndex,
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Value {
+    Const(u64),
+    Temp(ValueIndex)
+}
+
+pub type ValueIndex = usize;
+pub type LabelIndex = usize;
 pub type Vars = HashMap<String, ValueIndex>;
 
-pub struct Module {
-    functions: Vec<Function>
-}
+

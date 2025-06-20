@@ -69,8 +69,12 @@ fn main() {
 
 
     let pre_ir_gen = std::time::Instant::now();
-    let ir = ir::IREmmiter::new().generate_ir(&program);
-    let qbe_module = codegen::qbe::generate_qbe_module(&ir);
+
+    let module = ir::Module::new().from_ast(&program).unwrap();
+    dbg!(module);
+    return;
+    /*
+
     println!("[{}]: IR generation took: {:.2?}", "Info".green(), pre_ir_gen.elapsed());
 
     let mut no_ext = config.input_name.clone();
@@ -88,14 +92,8 @@ fn main() {
     println!("[{}]: Compilation took: {:.2?}", "Info".green(), pre_comp.elapsed());
 
     // std::process::Command::new("rm").arg(&ssa_name).arg(&s_name).spawn().unwrap().wait().unwrap();
+*/
 
-
-    // let pre_cg = std::time::Instant::now();
-    // let module = codegen::generate_qbe_module(&program);
-    // println!("[{}]: Code geneneration took: {:.2?}", "Info".green(), pre_cg.elapsed());
-    // if let Err(e) = compile_qbe_module(module, &config.input_name[0..config.input_name.len() - 3]) {
-    //     eprintln!("[{}]\n Failed to compile code module: {e}", "Error".red());
-    // }
 }
 
 

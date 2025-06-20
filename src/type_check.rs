@@ -30,6 +30,7 @@ pub enum TypeError {
     TypeMismatch,
     BoolBinaryOp,
     NonBoolIfCond,
+    BindingRedefinition,
 }
 
 fn get_expr_type(
@@ -113,6 +114,10 @@ fn type_check_statement(
 ) -> Result<(), Spanned<TypeError>> {
     match &s.v {
         parser::Statement::VarAssign { name, t, expr } => {
+            if vars.get(name).is_some() {
+                return Err(Spanned { offset: s.offset, len: s.len, line_beginning: s.line_beginning, v: TypeError::BindingRedefinition });
+
+            }
             let expr_type = get_expr_type(expr, vars)?;
             let expected = type_from_type_name(t);
             if expr_type != expected {
@@ -182,6 +187,10 @@ impl std::fmt::Display for TypeError {
             Self::UndefinedBinding => {
                 writeln!(f, "[{}]\n Found a undefined binding", "Error".red())?;
                 write!(f, "[{}]\n Maybe you have misspeled it?", "Note".green())
+            }
+            Self::BindingRedefinition => {
+                writeln!(f, "[{}]\n Found an attempt to redefine a binding", "Error".red())?;
+                write!(f, "[{}]\n Maybe you meant to reassign it?", "Note".green())
             }
             Self::BoolBinaryOp => {
                 writeln!(
