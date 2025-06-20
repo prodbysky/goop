@@ -7,14 +7,18 @@ impl Module {
         Self { functions: vec![] }
     }
 
-    pub fn from_ast(mut self, ast: &[Spanned<parser::Statement>]) -> Result<Self, Error>{
-        let main = self.add_function("main".to_string());
+    pub fn from_ast(ast: &[Spanned<parser::Statement>]) -> Result<Self, Error>{
+        let mut s = Self::new();
+        let main = s.add_function("main".to_string());
         for node in ast {
             main.add_statement(&node.v)?;
         }
-        Ok(self)
+        Ok(s)
     }
 
+    pub fn functions(&self) -> &[Function] {
+        &self.functions
+    }
 
     fn add_function(&mut self, name: String) -> &mut Function {
         self.functions.push(Function { name, instructions: vec![], max_temps: 0, max_labels: 0, vars: HashMap::new() });
@@ -23,22 +27,6 @@ impl Module {
 }
 
 impl Function {
-    fn alloc_temp(&mut self) -> ValueIndex {
-        self.max_temps += 1;
-        self.max_temps - 1
-    }
-    fn alloc_label(&mut self) -> LabelIndex {
-        self.max_labels += 1;
-        self.max_labels - 1
-    }
-
-    fn push_scope(&mut self) -> usize {
-        self.max_temps
-    }
-    fn pop_scope(&mut self, pre: usize) {
-        self.max_temps = pre;
-    }
-
 
     pub fn add_statement(&mut self, s: &parser::Statement) -> Result<(), Error> {
         use parser::Statement as s;
@@ -189,6 +177,44 @@ impl Function {
         }
         self.instructions.push(i);
         Ok(())
+    }
+    
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn instructions(&self) -> &[Instr] {
+        &self.instructions
+    }
+
+    pub fn vars(&self) -> &Vars {
+        &self.vars
+    }
+
+    pub fn max_labels(&self) -> &usize {
+        &self.max_labels
+    }
+
+    pub fn max_temps(&self) -> &usize {
+        &self.max_temps
+    }
+
+
+
+    fn alloc_temp(&mut self) -> ValueIndex {
+        self.max_temps += 1;
+        self.max_temps - 1
+    }
+    fn alloc_label(&mut self) -> LabelIndex {
+        self.max_labels += 1;
+        self.max_labels - 1
+    }
+
+    fn push_scope(&mut self) -> usize {
+        self.max_temps
+    }
+    fn pop_scope(&mut self, pre: usize) {
+        self.max_temps = pre;
     }
 }
 

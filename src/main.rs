@@ -68,11 +68,11 @@ fn main() {
     }
 
 
-    let pre_ir_gen = std::time::Instant::now();
+    let module = ir::Module::from_ast(&program).unwrap();
 
-    let module = ir::Module::new().from_ast(&program).unwrap();
-    dbg!(module);
-    return;
+    let qbe_mod = codegen::qbe::generate_qbe_module(module);
+    println!("{qbe_mod}");
+
     /*
 
     println!("[{}]: IR generation took: {:.2?}", "Info".green(), pre_ir_gen.elapsed());
