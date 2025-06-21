@@ -6,21 +6,18 @@ mod parser;
 mod type_check;
 
 use colored::Colorize;
+use clap::Parser;
 
 fn main() {
-    let config = match config::Config::from_args(std::env::args()) {
-        Some(c) => c,
-        None => return,
-    };
-    let input = match std::fs::read_to_string(&config.input_name) {
+    let args = config::Args::parse();
+    let input = match std::fs::read_to_string(&args.input) {
         Ok(i) => i,
         Err(e) => {
             eprintln!(
                 "[{}]: Failed to read {input_name}: {e}",
                 "Error".red(),
-                input_name = config.input_name.display(),
+                input_name = args.input,
             );
-            config::usage(&config.program_name);
             return;
         }
     };
@@ -32,7 +29,7 @@ fn main() {
 
     for e in &lexer_errors {
         eprintln!("{}", e.v);
-        display_diagnostic_info(&input, config.input_name.to_str().unwrap(), e);
+        display_diagnostic_info(&input, &args.input, e);
     }
 
     if !lexer_errors.is_empty() {
@@ -50,7 +47,7 @@ fn main() {
     let (program, parser_errors) = parser.parse();
     for e in &parser_errors {
         eprintln!("{}", e.v);
-        display_diagnostic_info(&input, config.input_name.to_str().unwrap(), e);
+        display_diagnostic_info(&input, &args.input, e);
     }
     if !parser_errors.is_empty() {
         return;
@@ -65,7 +62,7 @@ fn main() {
     );
     for e in &errs {
         eprintln!("{}", e.v);
-        display_diagnostic_info(&input, config.input_name.to_str().unwrap(), e);
+        display_diagnostic_info(&input, &args.input, e);
     }
     if !errs.is_empty() {
         return;
@@ -73,11 +70,11 @@ fn main() {
 
     let module = ir::Module::from_ast(&program).unwrap();
 
-    let str_name = config.input_name.to_str().unwrap();
+    let str_name = args.input;
     let no_ext = &str_name[..str_name.len() - 3];
 
     let pre = std::time::Instant::now();
-    codegen::inkwell::generate_code(module, no_ext);
+    codegen::inkwell::generate_code(module, no_ext, &args.output);
     println!(
         "[{}]: Compilation took: {:.2?}",
         "Info".green(),
