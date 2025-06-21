@@ -72,30 +72,7 @@ fn main() {
     }
 
     let module = ir::Module::from_ast(&program).unwrap();
-
-    let qbe_mod = codegen::qbe::generate_qbe_module(module);
-    println!("{qbe_mod}");
-
-    /*
-
-        println!("[{}]: IR generation took: {:.2?}", "Info".green(), pre_ir_gen.elapsed());
-
-        let mut no_ext = config.input_name.clone();
-        no_ext.set_extension("");
-
-        let mut ssa_name = no_ext.clone(); ssa_name.set_extension("ssa");
-        let mut s_name = no_ext.clone(); s_name.set_extension("s");
-
-        std::fs::write(&ssa_name, format!("{qbe_module}")).unwrap();
-
-
-        let pre_comp = std::time::Instant::now();
-        std::process::Command::new("qbe").arg(&ssa_name).arg("-o").arg(&s_name).spawn().unwrap().wait().unwrap();
-        std::process::Command::new("gcc").arg(&s_name).arg("-o").arg(&no_ext).spawn().unwrap().wait().unwrap();
-        println!("[{}]: Compilation took: {:.2?}", "Info".green(), pre_comp.elapsed());
-
-        // std::process::Command::new("rm").arg(&ssa_name).arg(&s_name).spawn().unwrap().wait().unwrap();
-    */
+    let m = codegen::inkwell::generate_code(module, std::path::Path::new("test.s"));
 }
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {

@@ -12,7 +12,6 @@ impl Module {
         for node in ast {
             main.add_statement(&node.v)?;
         }
-        dbg!(main);
         Ok(s)
     }
 
@@ -48,7 +47,8 @@ impl Function {
             }
             s::VarReassign { name, expr } => {
                 let v = self.add_expr(&expr.v)?;
-                self.vars.insert(name.to_string(), v);
+                let prev = self.vars.get(name).unwrap();
+                self.add_instr(Instr::Assign { index: *prev, v: Value::Temp(v) })?;
             }
             s::If { cond, body } => {
                 let v = self.add_expr(&cond.v)?;
