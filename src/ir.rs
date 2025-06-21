@@ -1,5 +1,5 @@
 use crate::{Spanned, lexer, parser};
-use std::collections::HashMap;
+use std::{collections::HashMap, panic::UnwindSafe};
 
 impl Module {
     pub fn new() -> Self {
@@ -25,7 +25,7 @@ impl Module {
             instructions: vec![],
             max_temps: 0,
             max_labels: 0,
-            vars: HashMap::new(),
+            vars: vec![HashMap::new()],
         });
         self.functions.first_mut().unwrap()
     }
@@ -43,12 +43,12 @@ impl Function {
             }
             s::VarAssign { name, t: _, expr } => {
                 let v = self.add_expr(&expr.v)?;
-                self.vars.insert(name.to_string(), v);
+                self.put_var(name, v);
             }
             s::VarReassign { name, expr } => {
                 let v = self.add_expr(&expr.v)?;
-                let prev = self.vars.get(name).unwrap();
-                self.add_instr(Instr::Assign { index: *prev, v: Value::Temp(v) })?;
+                let prev = self.get_var(name);
+                self.add_instr(Instr::Assign { index: prev, v: Value::Temp(v) })?;
             }
             s::If { cond, body } => {
                 let v = self.add_expr(&cond.v)?;
@@ -60,9 +60,11 @@ impl Function {
                     otherwise: over,
                 })?;
                 self.add_instr(Instr::Label(into))?;
+                self.push_scope();
                 for s in body {
                     self.add_statement(&s.v)?;
                 }
+                self.pop_scope();
                 self.add_instr(Instr::Label(over))?;
             }
             s::While { cond, body: b } => {
@@ -80,9 +82,11 @@ impl Function {
 
                 self.add_instr(Instr::Label(body))?;
 
+                self.push_scope();
                 for s in b {
                     self.add_statement(&s.v)?;
                 }
+                self.pop_scope();
                 self.add_instr(Instr::Jump(header))?;
                 self.add_instr(Instr::Label(over))?;
             }
@@ -116,7 +120,7 @@ impl Function {
                 })?;
                 Ok(place)
             }
-            parser::Expression::Identifier(i) => Ok(*self.vars.get(i).unwrap()),
+            parser::Expression::Identifier(i) => Ok(self.get_var(i)),
             parser::Expression::Binary { left, op, right } => {
                 let l = self.add_expr(&left.v)?;
                 let r = self.add_expr(&right.v)?;
@@ -259,16 +263,33 @@ impl Function {
         Ok(())
     }
 
+    pub fn push_scope(&mut self) {
+        self.vars.push(HashMap::new());
+    }
+
+    pub fn pop_scope(&mut self) {
+        self.vars.pop().unwrap();
+    }
+
+    fn get_var(&self, name: &str) -> ValueIndex {
+        for s in self.vars.iter().rev() {
+            if let Some(v) = s.get(name) {
+                return *v;
+            }
+        }
+        unreachable!("Type checker should have caught this")
+    }
+
+    fn put_var(&mut self, name: &str, v: ValueIndex) {
+        self.vars.last_mut().unwrap().insert(name.to_string(), v);
+    }
+
     pub fn name(&self) -> &String {
         &self.name
     }
 
     pub fn instructions(&self) -> &[Instr] {
         &self.instructions
-    }
-
-    pub fn vars(&self) -> &Vars {
-        &self.vars
     }
 
     pub fn max_labels(&self) -> &usize {
@@ -298,7 +319,7 @@ pub struct Module {
 pub struct Function {
     name: String,
     instructions: Vec<Instr>,
-    vars: Vars,
+    vars: ScopeStack,
     max_labels: usize,
     max_temps: usize,
 }
@@ -346,4 +367,4 @@ pub enum Value {
 
 pub type ValueIndex = usize;
 pub type LabelIndex = usize;
-pub type Vars = HashMap<String, ValueIndex>;
+pub type ScopeStack = Vec<HashMap<String, ValueIndex>>;
