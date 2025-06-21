@@ -24,6 +24,7 @@ fn main() {
 
     let input_chars: Vec<_> = input.chars().collect();
     let lexer = lexer::Lexer::new(&input_chars);
+    let pre_parsing = std::time::Instant::now();
     let elements: Vec<_> = lexer.collect();
     let lexer_errors: Vec<_> = elements.iter().filter_map(|e| e.as_ref().err()).collect();
 
@@ -52,6 +53,11 @@ fn main() {
     if !parser_errors.is_empty() {
         return;
     }
+    println!(
+        "[{}]: Parsing source code took: {:.2?}",
+        "Info".green(),
+        pre_parsing.elapsed()
+    );
 
     let pre_t_check = std::time::Instant::now();
     let errs = type_check::type_check(&program);
