@@ -72,7 +72,18 @@ fn main() {
     }
 
     let module = ir::Module::from_ast(&program).unwrap();
-    let m = codegen::inkwell::generate_code(module, std::path::Path::new("test.s"));
+
+    let str_name = config.input_name.to_str().unwrap();
+    let no_ext = &str_name[..str_name.len() - 3];
+
+    let pre = std::time::Instant::now();
+    codegen::inkwell::generate_code(module, no_ext);
+    println!(
+        "[{}]: Compilation took: {:.2?}",
+        "Info".green(),
+        pre.elapsed()
+    );
+
 }
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
