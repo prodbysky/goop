@@ -136,6 +136,7 @@ pub fn type_check(ast: &[Spanned<parser::Statement>]) -> Vec<Spanned<TypeError>>
     let mut funcs = HashMap::new();
     // TODO: HACK
     funcs.insert("putchar".to_string(), FunctionType { ret: Type::Void, args: vec![Type::Char] });
+    funcs.insert("getchar".to_string(), FunctionType { ret: Type::Char, args: vec![] });
     let mut errs = vec![];
 
     for s in ast {

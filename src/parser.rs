@@ -209,16 +209,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expect_ident(&mut self) -> Result<Spanned<String>, Spanned<Error>> {
-        let i = self.expect(&lexer::Token::Identifier("".to_string()))?;
-        match &i.v {
-            lexer::Token::Identifier(name) => {
-                Ok(Spanned { offset: i.offset, len: i.len, line_beginning: i.line_beginning, v: name.to_string() })
-            }
-            _ => unreachable!()
-        }
-    }
-
     // https://craftinginterpreters.com/parsing-expressions.html
     fn parse_expression(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         self.parse_comparison()
@@ -295,7 +285,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        match self.current() {
+        match self.current().cloned() {
             None => Err(self.error_from_last_tk(Error::ExpectedPrimaryExpresion)),
             Some(Spanned {
                 offset,
@@ -304,10 +294,10 @@ impl<'a> Parser<'a> {
                 v: lexer::Token::Integer(n),
             }) => {
                 let r = Ok(Spanned {
-                    offset: *offset,
-                    len: *len,
-                    line_beginning: *line_beginning,
-                    v: Expression::Integer(*n),
+                    offset,
+                    len,
+                    line_beginning,
+                    v: Expression::Integer(n),
                 });
                 self.eat();
                 r
@@ -319,10 +309,10 @@ impl<'a> Parser<'a> {
                 v: lexer::Token::Char(n),
             }) => {
                 let r = Ok(Spanned {
-                    offset: *offset,
-                    len: *len,
-                    line_beginning: *line_beginning,
-                    v: Expression::Char(*n),
+                    offset,
+                    len,
+                    line_beginning,
+                    v: Expression::Char(n),
                 });
                 self.eat();
                 r
@@ -334,9 +324,9 @@ impl<'a> Parser<'a> {
                 v: lexer::Token::Keyword(lexer::Keyword::True),
             }) => {
                 let r = Ok(Spanned {
-                    offset: *offset,
-                    len: *len,
-                    line_beginning: *line_beginning,
+                    offset,
+                    len,
+                    line_beginning,
                     v: Expression::Bool(true),
                 });
                 self.eat();
@@ -349,9 +339,9 @@ impl<'a> Parser<'a> {
                 v: lexer::Token::Keyword(lexer::Keyword::False),
             }) => {
                 let r = Ok(Spanned {
-                    offset: *offset,
-                    len: *len,
-                    line_beginning: *line_beginning,
+                    offset,
+                    len,
+                    line_beginning,
                     v: Expression::Bool(false),
                 });
                 self.eat();
@@ -363,14 +353,33 @@ impl<'a> Parser<'a> {
                 line_beginning,
                 v: lexer::Token::Identifier(ident),
             }) => {
-                let r = Ok(Spanned {
-                    offset: *offset,
-                    len: *len,
-                    line_beginning: *line_beginning,
-                    v: Expression::Identifier(ident.to_string()),
-                });
-                self.eat();
-                r
+                self.eat().unwrap();
+                match self.current().cloned() {
+                    Some(Spanned { offset, len: _, line_beginning, v: lexer::Token::OpenParen }) => {
+                        self.eat().unwrap();
+                        let mut args = vec![];
+                        while self.current().is_some_and(|t| t.v != lexer::Token::CloseParen) {
+                            let expr = self.parse_expression()?;
+                            args.push(expr);
+                            match self.current() {
+                                None => return Err(self.error_from_last_tk(Error::UnexpectedToken)),
+                                Some(Spanned { v: lexer::Token::Comma, .. }) => self.eat(),
+                                Some(Spanned { v: lexer::Token::CloseParen, .. }) => {break;},
+                                Some(Spanned { .. }) => return Err(self.error_from_last_tk(Error::UnexpectedToken)),
+                            };
+                        }
+                        let end = self.expect(&lexer::Token::CloseParen)?;
+                        Ok(Spanned { offset: offset, len: end.offset - offset, line_beginning: line_beginning, v: Expression::FuncCall { name: ident.to_string(), args } })
+                    }
+                    None | Some(_) => {
+                        Ok(Spanned {
+                            offset,
+                            len,
+                            line_beginning,
+                            v: Expression::Identifier(ident.to_string()),
+                        })
+                    },
+                }
             }
             Some(Spanned {
                 v: lexer::Token::OpenParen,

@@ -18,10 +18,10 @@ impl<'a> Codegen<'a> {
     ) -> Result<inkwell::module::Module, inkwell::builder::BuilderError> {
         let llvm_module = self.ctx.create_module("main");
         let word = self.ctx.i64_type();
+        let void = self.ctx.void_type();
 
-        word.fn_type(&[word.into()], false);
-        let putchar = llvm_module.add_function("putchar", word.fn_type(&[word.into()], false), None);
-
+        let putchar = llvm_module.add_function("putchar", void.fn_type(&[word.into()], false), None);
+        let getchar = llvm_module.add_function("getchar", word.fn_type(&[], false), None);
 
         for f in module.functions() {
             let fn_type = word.fn_type(&[], false);
@@ -173,13 +173,24 @@ impl<'a> Codegen<'a> {
                         for arg in args {
                             a.push(get_value(arg)?.into());
                         }
-                        assert!(name.as_str() == "putchar");
-                        if into.is_some() {
-                            let a = self.builder.build_call(putchar, &a, name)?;
-                            self.builder.build_store(locals[into.unwrap()], a.try_as_basic_value().unwrap_left())?;
-                        } else {
-                            self.builder.build_call(putchar, &a, name)?;
-
+                        match name.as_str() {
+                            "putchar" => {
+                                if into.is_some() {
+                                    let a = self.builder.build_call(putchar, &a, name)?;
+                                    self.builder.build_store(locals[into.unwrap()], a.try_as_basic_value().unwrap_left())?;
+                                } else {
+                                    self.builder.build_call(putchar, &a, name)?;
+                                }
+                            }
+                            "getchar" => {
+                                if into.is_some() {
+                                    let a = self.builder.build_call(getchar, &a, name)?;
+                                    self.builder.build_store(locals[into.unwrap()], a.try_as_basic_value().unwrap_left())?;
+                                } else {
+                                    self.builder.build_call(getchar, &a, name)?;
+                                }
+                            }
+                            _ => unreachable!()
                         }
                     }
                 }
