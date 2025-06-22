@@ -52,7 +52,7 @@ impl<'a> Parser<'a> {
                 lexer::Keyword::Return => {
                     self.eat();
                     let expr = self.parse_expression()?;
-                    let semicolon = self.expect(&lexer::Token::Semicolon)?;
+                    let semicolon = self.expect_semicolon(Error::ExpectedSemicolonAfterStatement)?;
                     Ok(Spanned {
                         offset,
                         len: semicolon.offset - offset,
@@ -71,28 +71,19 @@ impl<'a> Parser<'a> {
                             return Err(self.error_from_last_tk(Error::ExpectedIdentifier));
                         }
                     };
-                    self.expect(&lexer::Token::Identifier("".to_string()))?;
-                    self.expect(&lexer::Token::Colon)?;
-                    let type_name = match self.current().cloned() {
-                        Some(Spanned {
-                            v: lexer::Token::Identifier(ident),
-                            ..
-                        }) => ident,
-                        Some(Spanned { .. }) | None => {
-                            return Err(self.error_from_last_tk(Error::ExpectedIdentifier));
-                        }
-                    };
-                    self.eat();
-                    self.expect(&lexer::Token::Assign)?;
+                    self.expect_ident(Error::ExpectedBindingName)?;
+                    self.expect(&lexer::Token::Colon,Error::ExpectedColonAfterLetBindingName)?;
+                    let type_name = self.expect_ident(Error::ExpectedTypeName)?;
+                    self.expect(&lexer::Token::Assign, Error::UnexpectedToken)?;
                     let expr = self.parse_expression()?;
-                    let e = self.eat().unwrap();
+                    let semicolon = self.expect_semicolon(Error::ExpectedSemicolonAfterStatement)?;
                     Ok(Spanned {
                         offset: l.offset,
-                        len: e.offset - l.offset,
+                        len: semicolon.offset - l.offset,
                         line_beginning: l.line_beginning,
                         v: Statement::VarAssign {
                             name: ident.to_string(),
-                            t: type_name.to_string(),
+                            t: type_name.v,
                             expr,
                         },
                     })
@@ -100,7 +91,7 @@ impl<'a> Parser<'a> {
                 lexer::Keyword::If => {
                     let begin = self.eat().unwrap();
                     let expr = self.parse_expression()?;
-                    self.expect(&lexer::Token::OpenCurly)?;
+                    self.expect(&lexer::Token::OpenCurly, Error::ExpectedBlockBegin)?;
                     let mut body = vec![];
                     while self
                         .current()
@@ -108,7 +99,7 @@ impl<'a> Parser<'a> {
                     {
                         body.push(self.parse_statement()?);
                     }
-                    let end = self.expect(&lexer::Token::CloseCurly)?;
+                    let end = self.expect(&lexer::Token::CloseCurly, Error::ExpectedBlockEnd)?;
                     Ok(Spanned {
                         offset: begin.offset,
                         len: end.offset - begin.offset,
@@ -119,7 +110,7 @@ impl<'a> Parser<'a> {
                 lexer::Keyword::While => {
                     let begin = self.eat().unwrap();
                     let expr = self.parse_expression()?;
-                    self.expect(&lexer::Token::OpenCurly)?;
+                    self.expect(&lexer::Token::OpenCurly, Error::ExpectedBlockBegin)?;
                     let mut body = vec![];
                     while self
                         .current()
@@ -127,7 +118,7 @@ impl<'a> Parser<'a> {
                     {
                         body.push(self.parse_statement()?);
                     }
-                    let end = self.expect(&lexer::Token::CloseCurly)?;
+                    let end = self.expect(&lexer::Token::CloseCurly, Error::ExpectedBlockEnd)?;
                     Ok(Spanned {
                         offset: begin.offset,
                         len: end.offset - begin.offset,
@@ -148,10 +139,10 @@ impl<'a> Parser<'a> {
                     lexer::Token::Assign => {
                         self.eat().unwrap();
                         let value = self.parse_expression()?;
-                        let end = self.expect(&lexer::Token::Semicolon)?;
+                        let semicolon = self.expect_semicolon(Error::ExpectedSemicolonAfterStatement)?;
                         Ok(Spanned {
                             offset,
-                            len: end.offset - offset,
+                            len: semicolon.offset - offset,
                             line_beginning,
                             v: Statement::VarReassign { name, expr: value },
                         })
@@ -169,9 +160,9 @@ impl<'a> Parser<'a> {
                                 Some(Spanned { .. }) => return Err(self.error_from_last_tk(Error::UnexpectedToken)),
                             };
                         }
-                        self.expect(&lexer::Token::CloseParen)?;
-                        let end = self.expect(&lexer::Token::Semicolon)?;
-                        Ok(Spanned { offset: begin.offset, len: end.offset - begin.offset, line_beginning: begin.line_beginning, v: Statement::FuncCall { name, args } })
+                        self.expect(&lexer::Token::CloseParen, Error::UnclosedParenthesis)?;
+                        let semicolon = self.expect_semicolon(Error::ExpectedSemicolonAfterStatement)?;
+                        Ok(Spanned { offset: begin.offset, len: semicolon.offset - begin.offset, line_beginning: begin.line_beginning, v: Statement::FuncCall { name, args } })
                     },
                     _ => Err(self.error_from_last_tk(Error::UnexpectedToken))
                 }
@@ -196,16 +187,32 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expect(&mut self, t: &lexer::Token) -> Result<Spanned<lexer::Token>, Spanned<Error>> {
+    fn expect(&mut self, t: &lexer::Token, e: Error) -> Result<Spanned<lexer::Token>, Spanned<Error>> {
         match self.eat() {
             Some(x) => {
                 if std::mem::discriminant(&x.v) == std::mem::discriminant(t) {
                     Ok(x)
                 } else {
-                    Err(self.error_from_last_tk(Error::UnexpectedToken))
+                    Err(self.error_from_last_tk(e))
                 }
             }
-            None => Err(self.error_from_last_tk(Error::UnexpectedToken)),
+            None => Err(self.error_from_last_tk(e)),
+        }
+    }
+
+    fn expect_semicolon(&mut self, e: Error) -> Result<Spanned<lexer::Token>, Spanned<Error>> {
+        self.expect(&lexer::Token::Semicolon, e)
+    }
+
+    fn expect_ident(&mut self, e: Error) -> Result<Spanned<String>, Spanned<Error>> {
+        match self.expect(&lexer::Token::Identifier("".to_string()), e) {
+            Ok(t) => match t.v {
+                lexer::Token::Identifier(name) => {
+                    Ok(Spanned { offset: t.offset, len: t.len, line_beginning: t.line_beginning, v: name })
+                }
+                _ => unreachable!()
+            }
+            Err(e) => Err(e)
         }
     }
 
@@ -368,7 +375,7 @@ impl<'a> Parser<'a> {
                                 Some(Spanned { .. }) => return Err(self.error_from_last_tk(Error::UnexpectedToken)),
                             };
                         }
-                        let end = self.expect(&lexer::Token::CloseParen)?;
+                        let end = self.expect(&lexer::Token::CloseParen, Error::UnclosedParenthesis)?;
                         Ok(Spanned { offset: offset, len: end.offset - offset, line_beginning: line_beginning, v: Expression::FuncCall { name: ident.to_string(), args } })
                     }
                     None | Some(_) => {
@@ -478,10 +485,16 @@ impl<'a> Parser<'a> {
 pub enum Error {
     ExpectedPrimaryExpresion,
     UnexpectedTokenInExpression,
+    ExpectedSemicolonAfterStatement,
     ExpectedBinaryOperator,
     UnclosedParenthesis,
     UnexpectedToken,
     ExpectedIdentifier,
+    ExpectedBindingName,
+    ExpectedTypeName,
+    ExpectedColonAfterLetBindingName,
+    ExpectedBlockBegin,
+    ExpectedBlockEnd,
 }
 
 impl std::fmt::Display for Error {
@@ -530,6 +543,49 @@ impl std::fmt::Display for Error {
                     "[{}]\n  Expected an identifier here (variable name?)",
                     "Error".red()
                 )
+            }
+            Self::ExpectedSemicolonAfterStatement => {
+                write!(
+                    f,
+                    "[{}]\n  Expected a semicolon here to terminate a statement",
+                    "Error".red()
+                )
+            }
+            Self::ExpectedBlockBegin => {
+                write!(
+                    f,
+                    "[{}]\n  Expected a `{{` here to start a block, for a `if` or `while` statement",
+                    "Error".red()
+                )
+            }
+            Self::ExpectedBlockEnd => {
+                write!(
+                    f,
+                    "[{}]\n  Expected a `}}` here to end a block, of a `if` or `while` statement",
+                    "Error".red()
+                )
+            }
+            Self::ExpectedBindingName => {
+                write!(
+                    f,
+                    "[{}]\n  Expected here to be a name for a variable",
+                    "Error".red()
+                )
+            }
+            Self::ExpectedTypeName => {
+                write!(
+                    f,
+                    "[{}]\n  Expected here to be a name of a type",
+                    "Error".red()
+                )
+            }
+            Self::ExpectedColonAfterLetBindingName => {
+                write!(
+                    f,
+                    "[{}]\n  Expected a colon separator after the name of a variable",
+                    "Error".red()
+                )
+
             }
         }
     }

@@ -68,7 +68,7 @@ impl<'a> Lexer<'a> {
                 ' ' | '\t' => self.offset += 1,
                 '\n' => {
                     self.offset += 1;
-                    self.line_beginning += self.offset;
+                    self.line_beginning = self.offset;
                 }
                 _ => unreachable!(),
             }
@@ -103,10 +103,11 @@ impl<'a> Lexer<'a> {
     }
 
     fn lex_and_skip_single_char<T>(&mut self, o: T) -> Result<Spanned<T>, Spanned<Error>> {
-        self.eat();
+        let prev_line_begin = self.line_beginning;
+        self.eat().unwrap();
         Ok(Spanned {
             len: 1,
-            line_beginning: self.line_beginning,
+            line_beginning: prev_line_begin,
             offset: self.offset - 1,
             v: o,
         })
@@ -190,6 +191,7 @@ impl Iterator for Lexer<'_> {
             }
             'a'..='z' | 'A'..='Z' => {
                 let begin = self.offset;
+                let begin_line = self.line_beginning;
                 while self
                     .current()
                     .is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_')
@@ -202,43 +204,43 @@ impl Iterator for Lexer<'_> {
                     "return" => Some(Ok(Spanned {
                         offset: begin,
                         len: end - begin,
-                        line_beginning: self.line_beginning,
+                        line_beginning: begin_line,
                         v: Token::Keyword(Keyword::Return),
                     })),
                     "let" => Some(Ok(Spanned {
                         offset: begin,
                         len: end - begin,
-                        line_beginning: self.line_beginning,
+                        line_beginning: begin_line,
                         v: Token::Keyword(Keyword::Let),
                     })),
                     "true" => Some(Ok(Spanned {
                         offset: begin,
                         len: end - begin,
-                        line_beginning: self.line_beginning,
+                        line_beginning: begin_line,
                         v: Token::Keyword(Keyword::True),
                     })),
                     "false" => Some(Ok(Spanned {
                         offset: begin,
                         len: end - begin,
-                        line_beginning: self.line_beginning,
+                        line_beginning: begin_line,
                         v: Token::Keyword(Keyword::False),
                     })),
                     "if" => Some(Ok(Spanned {
                         offset: begin,
                         len: end - begin,
-                        line_beginning: self.line_beginning,
+                        line_beginning: begin_line,
                         v: Token::Keyword(Keyword::If),
                     })),
                     "while" => Some(Ok(Spanned {
                         offset: begin,
                         len: end - begin,
-                        line_beginning: self.line_beginning,
+                        line_beginning: begin_line,
                         v: Token::Keyword(Keyword::While),
                     })),
                     _ => Some(Ok(Spanned {
                         offset: begin,
                         len: end - begin,
-                        line_beginning: self.line_beginning,
+                        line_beginning: begin_line,
                         v: Token::Identifier(slice),
                     })),
                 }
