@@ -1,5 +1,5 @@
 use crate::{Spanned, lexer, parser};
-use std::{collections::HashMap, panic::UnwindSafe};
+use std::collections::HashMap;
 
 impl Module {
     pub fn new() -> Self {
@@ -93,6 +93,7 @@ impl Function {
                 self.add_instr(Instr::Jump(header))?;
                 self.add_instr(Instr::Label(over))?;
             }
+            s::FuncCall { name, args } => todo!("ir gen for function call as statement")
         }
         Ok(())
     }
@@ -146,6 +147,7 @@ impl Function {
                 })?;
                 Ok(place)
             }
+            parser::Expression::FuncCall { name, args } => todo!("ir generation for function call as expression")
         }
     }
 

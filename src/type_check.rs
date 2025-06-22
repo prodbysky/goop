@@ -94,6 +94,7 @@ fn get_expr_type(
             }),
             Some(t) => Ok(*t),
         },
+        parser::Expression::FuncCall { name, args } => todo!("type check function call as expr")
     }
 }
 
@@ -175,6 +176,7 @@ fn type_check_statement(
                 type_check_statement(s, vars)?;
             }
         }
+        parser::Statement::FuncCall { name, args } => todo!("type check function calls")
     }
     Ok(())
 }

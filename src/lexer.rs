@@ -28,6 +28,7 @@ pub enum Token {
     Semicolon,
     Assign,
     Colon,
+    Comma,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -172,6 +173,7 @@ impl Iterator for Lexer<'_> {
             ';' => Some(self.lex_and_skip_single_char(Token::Semicolon)),
             ':' => Some(self.lex_and_skip_single_char(Token::Colon)),
             '=' => Some(self.lex_and_skip_single_char(Token::Assign)),
+            ',' => Some(self.lex_and_skip_single_char(Token::Comma)),
             '\'' => {
                 let begin = self.offset;
                 let begin_line = self.line_beginning;
