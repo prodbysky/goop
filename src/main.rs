@@ -8,7 +8,9 @@ mod type_check;
 use clap::Parser;
 use colored::Colorize;
 
-fn main() {
+use crate::parser::Statement;
+
+fn main() -> Result<(), ()> {
     let args = config::Args::parse();
     let input = match std::fs::read_to_string(&args.input) {
         Ok(i) => i,
@@ -18,37 +20,55 @@ fn main() {
                 "Error".red(),
                 input_name = args.input,
             );
-            return;
+            return Err(());
         }
     };
 
-    let input_chars: Vec<_> = input.chars().collect();
-    let lexer = lexer::Lexer::new(&input_chars);
+    let program = parse_source(&input, &args.input)?;
+    type_check(&program, &args.input, &input)?;
+
+    let module = ir::Module::from_ast(&program).unwrap();
+
+    let no_ext = &args.input[..args.input.len() - 3];
+
+    let pre = std::time::Instant::now();
+    codegen::inkwell::generate_code(module, no_ext, &args.output);
+    println!(
+        "[{}]: Compilation took: {:.2?}",
+        "Info".green(),
+        pre.elapsed()
+    );
+    Ok(())
+}
+
+fn parse_source(input: &str, name: &str) -> Result<Vec<Spanned<Statement>>, ()> {
     let pre_parsing = std::time::Instant::now();
-    let tokens: Vec<_> = match lexer.lex() {
+    let tokens: Vec<_> = match lexer::Lexer::new(&input.chars().collect::<Vec<_>>()).lex() {
         Ok(ts) => ts,
         Err(e) => {
             eprintln!("{}", e.v);
-            display_diagnostic_info(&input, &args.input, &e);
-            return;
+            display_diagnostic_info(&input, input, &e);
+            return Err(());
         }
     };
 
-    let parser = parser::Parser::new(&tokens);
-    let (program, parser_errors) = parser.parse();
+    let (program, parser_errors) = parser::Parser::new(&tokens).parse();
     for e in &parser_errors {
         eprintln!("{}", e.v);
-        display_diagnostic_info(&input, &args.input, e);
+        display_diagnostic_info(&input, name, e);
     }
     if !parser_errors.is_empty() {
-        return;
+        return Err(());
     }
     println!(
         "[{}]: Parsing source code took: {:.2?}",
         "Info".green(),
         pre_parsing.elapsed()
     );
+    Ok(program)
+}
 
+fn type_check(program: &[Spanned<Statement>], name: &str, input: &str) -> Result<(), ()> {
     let pre_t_check = std::time::Instant::now();
     let errs = type_check::type_check(&program);
     println!(
@@ -58,24 +78,12 @@ fn main() {
     );
     for e in &errs {
         eprintln!("{}", e.v);
-        display_diagnostic_info(&input, &args.input, e);
+        display_diagnostic_info(&input, name, e);
     }
     if !errs.is_empty() {
-        return;
+        return Err(());
     }
-
-    let module = ir::Module::from_ast(&program).unwrap();
-
-    let str_name = args.input;
-    let no_ext = &str_name[..str_name.len() - 3];
-
-    let pre = std::time::Instant::now();
-    codegen::inkwell::generate_code(module, no_ext, &args.output);
-    println!(
-        "[{}]: Compilation took: {:.2?}",
-        "Info".green(),
-        pre.elapsed()
-    );
+    Ok(())
 }
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {

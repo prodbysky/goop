@@ -1,7 +1,6 @@
 use crate::ir;
 use crate::lexer;
 
-
 struct Codegen<'a> {
     ctx: &'a inkwell::context::Context,
     builder: inkwell::builder::Builder<'a>,

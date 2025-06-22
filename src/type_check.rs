@@ -9,7 +9,6 @@ pub enum Type {
     Int,
     Bool,
     Char,
-    Function { ret: Box<Type>, args: Vec<Type> },
     Void,
 }
 

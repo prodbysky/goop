@@ -8,6 +8,19 @@ impl Module {
 
     pub fn from_ast(ast: &[Spanned<parser::Statement>]) -> Result<Self, Error> {
         let mut s = Self::new();
+
+        for f in ast.iter().filter(|t| matches!(t.v, parser::Statement::FuncDefinition {..})) {
+            match &f.v {
+                parser::Statement::FuncDefinition { name, body, ret_type: _} => {
+                    let func = s.add_function(name.to_string());
+                    for node in body {
+                        func.add_statement(&node.v)?;
+                    }
+                }
+                _ => unreachable!()
+            }
+        }
+
         let main = s.add_function("main".to_string());
         for node in ast {
             main.add_statement(&node.v)?;
@@ -104,6 +117,7 @@ impl Function {
                     into: None,
                 })?;
             }
+            s::FuncDefinition {..} => unreachable!()
         }
         Ok(())
     }

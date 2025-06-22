@@ -131,6 +131,25 @@ impl<'a> Parser<'a> {
                         v: Statement::While { cond: expr, body },
                     })
                 }
+                lexer::Keyword::Func => {
+                    let begin = self.eat().unwrap();
+                    let ident = self.expect_ident(Error::ExpectedFunctionName)?;
+                    self.expect(&lexer::Token::OpenParen, Error::ExpectedFunctionArgListBegin)?;
+                    self.expect(&lexer::Token::CloseParen, Error::ExpectedFunctionArgListEnd)?;
+                    let ret_type = self.expect_ident(Error::ExpectedFunctionReturnType)?;
+                    self.expect(&lexer::Token::OpenCurly, Error::ExpectedBlockBegin)?;
+
+                    let mut body = vec![];
+                    while self
+                        .current()
+                        .is_some_and(|t| t.v != lexer::Token::CloseCurly)
+                    {
+                        body.push(self.parse_statement()?);
+                    }
+
+                    let last = self.expect(&lexer::Token::CloseCurly, Error::ExpectedBlockEnd)?;
+                    Ok(Spanned { offset: begin.offset, len: last.offset - begin.offset, line_beginning: begin.line_beginning, v: Statement::FuncDefinition { name: ident.v, body, ret_type: ret_type.v } })
+                }
                 lexer::Keyword::True | lexer::Keyword::False => unreachable!(),
             },
             Some(Spanned {
@@ -552,6 +571,10 @@ pub enum Error {
     ExpectedColonAfterLetBindingName,
     ExpectedBlockBegin,
     ExpectedBlockEnd,
+    ExpectedFunctionName,
+    ExpectedFunctionArgListBegin,
+    ExpectedFunctionArgListEnd,
+    ExpectedFunctionReturnType
 }
 
 impl std::fmt::Display for Error {
@@ -643,6 +666,34 @@ impl std::fmt::Display for Error {
                     "Error".red()
                 )
             }
+            Self::ExpectedFunctionName => {
+                write!(
+                    f,
+                    "[{}]\n  Expected a function name to be here",
+                    "Error".red()
+                )
+            }
+            Self::ExpectedFunctionArgListBegin => {
+                write!(
+                    f,
+                    "[{}]\n  Expected a `(` to begin a function argument list",
+                    "Error".red()
+                )
+            }
+            Self::ExpectedFunctionArgListEnd => {
+                write!(
+                    f,
+                    "[{}]\n  Expected a `)` to end a function argument list",
+                    "Error".red()
+                )
+            }
+            Self::ExpectedFunctionReturnType => {
+                write!(
+                    f,
+                    "[{}]\n  Expected a type name to end the function `header`",
+                    "Error".red()
+                )
+            }
         }
     }
 }
@@ -692,4 +743,10 @@ pub enum Statement {
         name: String,
         args: Vec<Spanned<Expression>>,
     },
+    // TODO: ARGS
+    FuncDefinition {
+        name: String,
+        body: Vec<Spanned<Statement>>,
+        ret_type: String
+    }
 }

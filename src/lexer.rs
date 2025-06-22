@@ -39,6 +39,7 @@ pub enum Keyword {
     False,
     If,
     While,
+    Func
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -71,32 +72,46 @@ impl<'a> Lexer<'a> {
             }
 
             match self.input[self.offset] {
-                c if c.is_ascii_digit() => 
-                {
+                c if c.is_ascii_digit() => {
                     tokens.push(self.lex_number().map(|t| Spanned {
                         v: Token::Integer(t.v),
                         offset: t.offset,
                         len: t.len,
-                        line_beginning: t.line_beginning
-                    })?);
-                },
-                c if "+-*/<>%!".contains(c) => {
-                    tokens.push(
-                        self.lex_operator().map(|t| Spanned {
-                            v: Token::Operator(t.v),
-                            offset: t.offset,
-                            len: t.len,
-                            line_beginning: t.line_beginning,
+                        line_beginning: t.line_beginning,
                     })?);
                 }
-                '(' => {tokens.push(self.lex_and_skip_single_char(Token::OpenParen)?);},
-                ')' => {tokens.push(self.lex_and_skip_single_char(Token::CloseParen)?);},
-                '{' => {tokens.push(self.lex_and_skip_single_char(Token::OpenCurly)?);},
-                '}' => {tokens.push(self.lex_and_skip_single_char(Token::CloseCurly)?);},
-                ';' => {tokens.push(self.lex_and_skip_single_char(Token::Semicolon)?);},
-                ':' => {tokens.push(self.lex_and_skip_single_char(Token::Colon)?);},
-                '=' => {tokens.push(self.lex_and_skip_single_char(Token::Assign)?);},
-                ',' => {tokens.push(self.lex_and_skip_single_char(Token::Comma)?);},
+                c if "+-*/<>%!".contains(c) => {
+                    tokens.push(self.lex_operator().map(|t| Spanned {
+                        v: Token::Operator(t.v),
+                        offset: t.offset,
+                        len: t.len,
+                        line_beginning: t.line_beginning,
+                    })?);
+                }
+                '(' => {
+                    tokens.push(self.lex_and_skip_single_char(Token::OpenParen)?);
+                }
+                ')' => {
+                    tokens.push(self.lex_and_skip_single_char(Token::CloseParen)?);
+                }
+                '{' => {
+                    tokens.push(self.lex_and_skip_single_char(Token::OpenCurly)?);
+                }
+                '}' => {
+                    tokens.push(self.lex_and_skip_single_char(Token::CloseCurly)?);
+                }
+                ';' => {
+                    tokens.push(self.lex_and_skip_single_char(Token::Semicolon)?);
+                }
+                ':' => {
+                    tokens.push(self.lex_and_skip_single_char(Token::Colon)?);
+                }
+                '=' => {
+                    tokens.push(self.lex_and_skip_single_char(Token::Assign)?);
+                }
+                ',' => {
+                    tokens.push(self.lex_and_skip_single_char(Token::Comma)?);
+                }
                 '\'' => {
                     let begin = self.offset;
                     let begin_line = self.line_beginning;
@@ -159,6 +174,12 @@ impl<'a> Lexer<'a> {
                             line_beginning: begin_line,
                             v: Token::Keyword(Keyword::While),
                         }),
+                        "func" => tokens.push(Spanned {
+                            offset: begin,
+                            len: end - begin,
+                            line_beginning: begin_line,
+                            v: Token::Keyword(Keyword::Func),
+                        }),
                         _ => tokens.push(Spanned {
                             offset: begin,
                             len: end - begin,
@@ -179,7 +200,6 @@ impl<'a> Lexer<'a> {
             };
         }
         Ok(tokens)
-
     }
 
     fn skip_ws(&mut self) {
