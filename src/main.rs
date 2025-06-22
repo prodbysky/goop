@@ -86,7 +86,6 @@ fn main() {
         "Info".green(),
         pre.elapsed()
     );
-
 }
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
