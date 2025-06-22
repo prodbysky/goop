@@ -93,7 +93,13 @@ impl Function {
                 self.add_instr(Instr::Jump(header))?;
                 self.add_instr(Instr::Label(over))?;
             }
-            s::FuncCall { name, args } => todo!("ir gen for function call as statement")
+            s::FuncCall { name, args } => {
+                let mut values = vec![];
+                for arg in args {
+                    values.push(Value::Temp(self.add_expr(&arg.v)?));
+                }
+                self.add_instr(Instr::FuncCall { name: name.to_string(), args: values, into: None })?;
+            }
         }
         Ok(())
     }
@@ -147,7 +153,15 @@ impl Function {
                 })?;
                 Ok(place)
             }
-            parser::Expression::FuncCall { name, args } => todo!("ir generation for function call as expression")
+            parser::Expression::FuncCall { name, args } => {
+                let mut values = vec![];
+                for arg in args {
+                    values.push(Value::Temp(self.add_expr(&arg.v)?));
+                }
+                let place = self.alloc_temp();
+                self.add_instr(Instr::FuncCall { name: name.to_string(), args: values, into: Some(place) })?;
+                Ok(place)
+            } 
         }
     }
 
@@ -356,6 +370,11 @@ pub enum Instr {
         to: LabelIndex,
         otherwise: LabelIndex,
     },
+    FuncCall {
+        name: String,
+        args: Vec<Value>,
+        into: Option<ValueIndex>
+    }
 }
 
 #[derive(Debug)]
