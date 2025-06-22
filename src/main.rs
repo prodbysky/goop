@@ -5,8 +5,8 @@ mod lexer;
 mod parser;
 mod type_check;
 
-use colored::Colorize;
 use clap::Parser;
+use colored::Colorize;
 
 fn main() {
     let args = config::Args::parse();

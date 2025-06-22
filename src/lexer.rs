@@ -101,81 +101,27 @@ impl<'a> Lexer<'a> {
         })
     }
 
+    fn lex_and_skip_single_char<T>(&mut self, o: T) -> Result<Spanned<T>, Spanned<Error>> {
+        self.eat();
+        Ok(Spanned {
+            len: 1,
+            line_beginning: self.line_beginning,
+            offset: self.offset - 1,
+            v: o,
+        })
+    }
+
     fn lex_operator(&mut self) -> Result<Spanned<Operator>, Spanned<Error>> {
         // TODO: Operation assign (^=) operator
         match self.current().unwrap() {
-            '+' => {
-                self.eat();
-                Ok(Spanned {
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    offset: self.offset - 1,
-                    v: Operator::Plus,
-                })
-            }
-            '-' => {
-                self.eat();
-                Ok(Spanned {
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    offset: self.offset - 1,
-                    v: Operator::Minus,
-                })
-            }
-            '*' => {
-                self.eat();
-                Ok(Spanned {
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    offset: self.offset - 1,
-                    v: Operator::Star,
-                })
-            }
-            '/' => {
-                self.eat();
-                Ok(Spanned {
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    offset: self.offset - 1,
-                    v: Operator::Slash,
-                })
-            }
-            '<' => {
-                self.eat();
-                Ok(Spanned {
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    offset: self.offset - 1,
-                    v: Operator::Less,
-                })
-            }
-            '>' => {
-                self.eat();
-                Ok(Spanned {
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    offset: self.offset - 1,
-                    v: Operator::More,
-                })
-            }
-            '%' => {
-                self.eat();
-                Ok(Spanned {
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    offset: self.offset - 1,
-                    v: Operator::Percent,
-                })
-            }
-            '!' => {
-                self.eat();
-                Ok(Spanned {
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    offset: self.offset - 1,
-                    v: Operator::Not,
-                })
-            }
+            '+' => self.lex_and_skip_single_char(Operator::Plus),
+            '-' => self.lex_and_skip_single_char(Operator::Minus),
+            '*' => self.lex_and_skip_single_char(Operator::Star),
+            '/' => self.lex_and_skip_single_char(Operator::Slash),
+            '<' => self.lex_and_skip_single_char(Operator::Less),
+            '>' => self.lex_and_skip_single_char(Operator::More),
+            '%' => self.lex_and_skip_single_char(Operator::Percent),
+            '!' => self.lex_and_skip_single_char(Operator::Not),
             c => Err(Spanned {
                 offset: self.offset,
                 len: 1,
@@ -207,87 +153,25 @@ impl Iterator for Lexer<'_> {
             return None;
         }
         match self.input[self.offset] {
-            c if c.is_ascii_digit() => {
-                let t = self.lex_number().map(|t| Spanned {
-                    v: Token::Integer(t.v),
-                    offset: t.offset,
-                    len: t.len,
-                    line_beginning: t.line_beginning,
-                });
-                Some(t)
-            }
-            c if "+-*/<>%!".contains(c) => {
-                let op = self.lex_operator().map(|t| Spanned {
-                    v: Token::Operator(t.v),
-                    offset: t.offset,
-                    len: t.len,
-                    line_beginning: t.line_beginning,
-                });
-                Some(op)
-            }
-            '(' => {
-                self.eat();
-                Some(Ok(Spanned {
-                    offset: self.offset - 1,
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    v: Token::OpenParen,
-                }))
-            }
-            ')' => {
-                self.eat();
-                Some(Ok(Spanned {
-                    offset: self.offset - 1,
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    v: Token::CloseParen,
-                }))
-            }
-            '{' => {
-                self.eat();
-                Some(Ok(Spanned {
-                    offset: self.offset - 1,
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    v: Token::OpenCurly,
-                }))
-            }
-            '}' => {
-                self.eat();
-                Some(Ok(Spanned {
-                    offset: self.offset - 1,
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    v: Token::CloseCurly,
-                }))
-            }
-            ';' => {
-                self.eat();
-                Some(Ok(Spanned {
-                    offset: self.offset - 1,
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    v: Token::Semicolon,
-                }))
-            }
-            ':' => {
-                self.eat();
-                Some(Ok(Spanned {
-                    offset: self.offset - 1,
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    v: Token::Colon,
-                }))
-            }
-            '=' => {
-                self.eat();
-                Some(Ok(Spanned {
-                    offset: self.offset - 1,
-                    len: 1,
-                    line_beginning: self.line_beginning,
-                    v: Token::Assign,
-                }))
-            }
+            c if c.is_ascii_digit() => Some(self.lex_number().map(|t| Spanned {
+                v: Token::Integer(t.v),
+                offset: t.offset,
+                len: t.len,
+                line_beginning: t.line_beginning,
+            })),
+            c if "+-*/<>%!".contains(c) => Some(self.lex_operator().map(|t| Spanned {
+                v: Token::Operator(t.v),
+                offset: t.offset,
+                len: t.len,
+                line_beginning: t.line_beginning,
+            })),
+            '(' => Some(self.lex_and_skip_single_char(Token::OpenParen)),
+            ')' => Some(self.lex_and_skip_single_char(Token::CloseParen)),
+            '{' => Some(self.lex_and_skip_single_char(Token::OpenCurly)),
+            '}' => Some(self.lex_and_skip_single_char(Token::CloseCurly)),
+            ';' => Some(self.lex_and_skip_single_char(Token::Semicolon)),
+            ':' => Some(self.lex_and_skip_single_char(Token::Colon)),
+            '=' => Some(self.lex_and_skip_single_char(Token::Assign)),
             '\'' => {
                 let begin = self.offset;
                 let begin_line = self.line_beginning;

@@ -48,7 +48,10 @@ impl Function {
             s::VarReassign { name, expr } => {
                 let v = self.add_expr(&expr.v)?;
                 let prev = self.get_var(name);
-                self.add_instr(Instr::Assign { index: prev, v: Value::Temp(v) })?;
+                self.add_instr(Instr::Assign {
+                    index: prev,
+                    v: Value::Temp(v),
+                })?;
             }
             s::If { cond, body } => {
                 let v = self.add_expr(&cond.v)?;
