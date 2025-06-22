@@ -98,7 +98,11 @@ impl Function {
                 for arg in args {
                     values.push(Value::Temp(self.add_expr(&arg.v)?));
                 }
-                self.add_instr(Instr::FuncCall { name: name.to_string(), args: values, into: None })?;
+                self.add_instr(Instr::FuncCall {
+                    name: name.to_string(),
+                    args: values,
+                    into: None,
+                })?;
             }
         }
         Ok(())
@@ -159,9 +163,13 @@ impl Function {
                     values.push(Value::Temp(self.add_expr(&arg.v)?));
                 }
                 let place = self.alloc_temp();
-                self.add_instr(Instr::FuncCall { name: name.to_string(), args: values, into: Some(place) })?;
+                self.add_instr(Instr::FuncCall {
+                    name: name.to_string(),
+                    args: values,
+                    into: Some(place),
+                })?;
                 Ok(place)
-            } 
+            }
         }
     }
 
@@ -381,8 +389,8 @@ pub enum Instr {
     FuncCall {
         name: String,
         args: Vec<Value>,
-        into: Option<ValueIndex>
-    }
+        into: Option<ValueIndex>,
+    },
 }
 
 #[derive(Debug)]

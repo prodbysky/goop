@@ -20,7 +20,8 @@ impl<'a> Codegen<'a> {
         let word = self.ctx.i64_type();
         let void = self.ctx.void_type();
 
-        let putchar = llvm_module.add_function("putchar", void.fn_type(&[word.into()], false), None);
+        let putchar =
+            llvm_module.add_function("putchar", void.fn_type(&[word.into()], false), None);
         let getchar = llvm_module.add_function("getchar", word.fn_type(&[], false), None);
 
         for f in module.functions() {
@@ -177,7 +178,10 @@ impl<'a> Codegen<'a> {
                             "putchar" => {
                                 if into.is_some() {
                                     let a = self.builder.build_call(putchar, &a, name)?;
-                                    self.builder.build_store(locals[into.unwrap()], a.try_as_basic_value().unwrap_left())?;
+                                    self.builder.build_store(
+                                        locals[into.unwrap()],
+                                        a.try_as_basic_value().unwrap_left(),
+                                    )?;
                                 } else {
                                     self.builder.build_call(putchar, &a, name)?;
                                 }
@@ -185,12 +189,15 @@ impl<'a> Codegen<'a> {
                             "getchar" => {
                                 if into.is_some() {
                                     let a = self.builder.build_call(getchar, &a, name)?;
-                                    self.builder.build_store(locals[into.unwrap()], a.try_as_basic_value().unwrap_left())?;
+                                    self.builder.build_store(
+                                        locals[into.unwrap()],
+                                        a.try_as_basic_value().unwrap_left(),
+                                    )?;
                                 } else {
                                     self.builder.build_call(getchar, &a, name)?;
                                 }
                             }
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         }
                     }
                 }

@@ -9,16 +9,13 @@ pub enum Type {
     Int,
     Bool,
     Char,
-    Function {
-        ret: Box<Type>,
-        args: Vec<Type>
-    },
+    Function { ret: Box<Type>, args: Vec<Type> },
     Void,
 }
 
 pub struct FunctionType {
     ret: Type,
-    args: Vec<Type>
+    args: Vec<Type>,
 }
 
 pub fn type_from_type_name(name: &str) -> Type {
@@ -48,7 +45,7 @@ pub enum TypeError {
 fn get_expr_type(
     e: &Spanned<parser::Expression>,
     vars: &HashMap<String, Type>,
-    funcs: &HashMap<String, FunctionType>
+    funcs: &HashMap<String, FunctionType>,
 ) -> Result<Type, Spanned<TypeError>> {
     match &e.v {
         parser::Expression::Integer(_) => Ok(Type::Int),
@@ -68,7 +65,10 @@ fn get_expr_type(
             }
         }
         parser::Expression::Binary { left, op, right } => {
-            let (left, right) = (get_expr_type(left, vars, funcs)?, get_expr_type(right, vars, funcs)?);
+            let (left, right) = (
+                get_expr_type(left, vars, funcs)?,
+                get_expr_type(right, vars, funcs)?,
+            );
             match op {
                 lexer::Operator::Plus
                 | lexer::Operator::Minus
@@ -115,15 +115,32 @@ fn get_expr_type(
 
             let called = match funcs.get(name) {
                 Some(f) => f,
-                None => return Err(Spanned { offset: e.offset, len: e.len, line_beginning: e.line_beginning, v: TypeError::UndefinedFunction }),
+                None => {
+                    return Err(Spanned {
+                        offset: e.offset,
+                        len: e.len,
+                        line_beginning: e.line_beginning,
+                        v: TypeError::UndefinedFunction,
+                    });
+                }
             };
 
             if called.args.len() != arg_types.len() {
-                return Err(Spanned { offset: e.offset, len: e.len, line_beginning: e.line_beginning, v: TypeError::ArgCountMismatch });
+                return Err(Spanned {
+                    offset: e.offset,
+                    len: e.len,
+                    line_beginning: e.line_beginning,
+                    v: TypeError::ArgCountMismatch,
+                });
             }
             for i in 0..called.args.len() {
                 if called.args[i] != arg_types[i] {
-                    return Err(Spanned { offset: e.offset, len: e.len, line_beginning: e.line_beginning, v: TypeError::TypeMismatch });
+                    return Err(Spanned {
+                        offset: e.offset,
+                        len: e.len,
+                        line_beginning: e.line_beginning,
+                        v: TypeError::TypeMismatch,
+                    });
                 }
             }
             Ok(called.ret.clone())
@@ -135,8 +152,20 @@ pub fn type_check(ast: &[Spanned<parser::Statement>]) -> Vec<Spanned<TypeError>>
     let mut vars = HashMap::new();
     let mut funcs = HashMap::new();
     // TODO: HACK
-    funcs.insert("putchar".to_string(), FunctionType { ret: Type::Void, args: vec![Type::Char] });
-    funcs.insert("getchar".to_string(), FunctionType { ret: Type::Char, args: vec![] });
+    funcs.insert(
+        "putchar".to_string(),
+        FunctionType {
+            ret: Type::Void,
+            args: vec![Type::Char],
+        },
+    );
+    funcs.insert(
+        "getchar".to_string(),
+        FunctionType {
+            ret: Type::Char,
+            args: vec![],
+        },
+    );
     let mut errs = vec![];
 
     for s in ast {
@@ -222,15 +251,32 @@ fn type_check_statement(
 
             let called = match funcs.get(name) {
                 Some(f) => f,
-                None => return Err(Spanned { offset: s.offset, len: s.len, line_beginning: s.line_beginning, v: TypeError::UndefinedFunction }),
+                None => {
+                    return Err(Spanned {
+                        offset: s.offset,
+                        len: s.len,
+                        line_beginning: s.line_beginning,
+                        v: TypeError::UndefinedFunction,
+                    });
+                }
             };
 
             if called.args.len() != arg_types.len() {
-                return Err(Spanned { offset: s.offset, len: s.len, line_beginning: s.line_beginning, v: TypeError::ArgCountMismatch });
+                return Err(Spanned {
+                    offset: s.offset,
+                    len: s.len,
+                    line_beginning: s.line_beginning,
+                    v: TypeError::ArgCountMismatch,
+                });
             }
             for i in 0..called.args.len() {
                 if called.args[i] != arg_types[i] {
-                    return Err(Spanned { offset: s.offset, len: s.len, line_beginning: s.line_beginning, v: TypeError::TypeMismatch });
+                    return Err(Spanned {
+                        offset: s.offset,
+                        len: s.len,
+                        line_beginning: s.line_beginning,
+                        v: TypeError::TypeMismatch,
+                    });
                 }
             }
         }
@@ -258,11 +304,19 @@ impl std::fmt::Display for TypeError {
                 write!(f, "[{}]\n Maybe you have misspeled it?", "Note".green())
             }
             Self::UndefinedFunction => {
-                writeln!(f, "[{}]\n Found a call to an undefined function", "Error".red())?;
+                writeln!(
+                    f,
+                    "[{}]\n Found a call to an undefined function",
+                    "Error".red()
+                )?;
                 write!(f, "[{}]\n Maybe you have misspeled it?", "Note".green())
             }
             Self::ArgCountMismatch => {
-                writeln!(f, "[{}]\n Found a call to an function, but the amount of arguments was invalid", "Error".red())
+                writeln!(
+                    f,
+                    "[{}]\n Found a call to an function, but the amount of arguments was invalid",
+                    "Error".red()
+                )
             }
             Self::BindingRedefinition => {
                 writeln!(
