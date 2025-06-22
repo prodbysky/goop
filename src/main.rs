@@ -25,24 +25,14 @@ fn main() {
     let input_chars: Vec<_> = input.chars().collect();
     let lexer = lexer::Lexer::new(&input_chars);
     let pre_parsing = std::time::Instant::now();
-    let elements: Vec<_> = lexer.collect();
-    let lexer_errors: Vec<_> = elements.iter().filter_map(|e| e.as_ref().err()).collect();
-
-    for e in &lexer_errors {
-        eprintln!("{}", e.v);
-        display_diagnostic_info(&input, &args.input, e);
-    }
-
-    if !lexer_errors.is_empty() {
-        return;
-    }
-    let tokens: Vec<_> = elements
-        .iter()
-        .filter_map(|e| match e {
-            Err(_) => None,
-            Ok(t) => Some(t.clone()),
-        })
-        .collect();
+    let tokens: Vec<_> = match lexer.lex() {
+        Ok(ts) => ts,
+        Err(e) => {
+            eprintln!("{}", e.v);
+            display_diagnostic_info(&input, &args.input, &e);
+            return;
+        }
+    };
 
     let parser = parser::Parser::new(&tokens);
     let (program, parser_errors) = parser.parse();
