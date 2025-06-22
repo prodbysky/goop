@@ -20,9 +20,8 @@ impl<'a> Codegen<'a> {
         let word = self.ctx.i64_type();
         let void = self.ctx.void_type();
 
-        let putchar =
-            llvm_module.add_function("putchar", void.fn_type(&[word.into()], false), None);
-        let getchar = llvm_module.add_function("getchar", word.fn_type(&[], false), None);
+        llvm_module.add_function("putchar", void.fn_type(&[word.into()], false), None);
+        llvm_module.add_function("getchar", word.fn_type(&[], false), None);
 
         for f in module.functions() {
             let fn_type = word.fn_type(&[], false);
@@ -174,30 +173,15 @@ impl<'a> Codegen<'a> {
                         for arg in args {
                             a.push(get_value(arg)?.into());
                         }
-                        match name.as_str() {
-                            "putchar" => {
-                                if into.is_some() {
-                                    let a = self.builder.build_call(putchar, &a, name)?;
-                                    self.builder.build_store(
-                                        locals[into.unwrap()],
-                                        a.try_as_basic_value().unwrap_left(),
-                                    )?;
-                                } else {
-                                    self.builder.build_call(putchar, &a, name)?;
-                                }
-                            }
-                            "getchar" => {
-                                if into.is_some() {
-                                    let a = self.builder.build_call(getchar, &a, name)?;
-                                    self.builder.build_store(
-                                        locals[into.unwrap()],
-                                        a.try_as_basic_value().unwrap_left(),
-                                    )?;
-                                } else {
-                                    self.builder.build_call(getchar, &a, name)?;
-                                }
-                            }
-                            _ => unreachable!(),
+                        let func = llvm_module.get_function(name.as_str()).unwrap();
+                        if into.is_some() {
+                            let a = self.builder.build_call(func, &a, name)?;
+                            self.builder.build_store(
+                                locals[into.unwrap()],
+                                a.try_as_basic_value().unwrap_left(),
+                            )?;
+                        } else {
+                            self.builder.build_call(func, &a, name)?;
                         }
                     }
                 }
@@ -207,7 +191,6 @@ impl<'a> Codegen<'a> {
                 self.builder.build_return(Some(&word.const_int(0, false)))?;
             }
         }
-
         Ok(llvm_module)
     }
 }

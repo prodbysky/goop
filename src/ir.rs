@@ -11,7 +11,7 @@ impl Module {
 
         for f in ast.iter().filter(|t| matches!(t.v, parser::Statement::FuncDefinition {..})) {
             match &f.v {
-                parser::Statement::FuncDefinition { name, body, ret_type: _} => {
+                parser::Statement::FuncDefinition { name, body, ret_type: _ } => {
                     let func = s.add_function(name.to_string());
                     for node in body {
                         func.add_statement(&node.v)?;
@@ -21,10 +21,6 @@ impl Module {
             }
         }
 
-        let main = s.add_function("main".to_string());
-        for node in ast {
-            main.add_statement(&node.v)?;
-        }
         Ok(s)
     }
 
@@ -40,7 +36,7 @@ impl Module {
             max_labels: 0,
             vars: vec![HashMap::new()],
         });
-        self.functions.first_mut().unwrap()
+        self.functions.last_mut().unwrap()
     }
 }
 

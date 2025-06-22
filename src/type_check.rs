@@ -279,6 +279,7 @@ fn type_check_statement(
                 }
             }
         }
+        parser::Statement::FuncDefinition { name, body, ret_type } => {println!("SKIPPING TYPECHECK OF FUNC DEFINITION")}
     }
     Ok(())
 }
