@@ -428,9 +428,9 @@ impl<'a> Parser<'a> {
                         let end =
                             self.expect(&lexer::Token::CloseParen, Error::UnclosedParenthesis)?;
                         Ok(Spanned {
-                            offset: offset,
+                            offset,
                             len: end.offset - offset,
-                            line_beginning: line_beginning,
+                            line_beginning,
                             v: Expression::FuncCall {
                                 name: ident.to_string(),
                                 args,

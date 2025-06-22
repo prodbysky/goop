@@ -27,7 +27,7 @@ impl<'a> Codegen<'a> {
         for f in module.functions() {
             let fn_type = word.fn_type(&[], false);
             let func = llvm_module.add_function(
-                &f.name(),
+                f.name(),
                 fn_type,
                 Some(inkwell::module::Linkage::External),
             );
@@ -41,7 +41,7 @@ impl<'a> Codegen<'a> {
 
             let mut label_blocks = std::collections::HashMap::new();
 
-            for (_idx, i) in f.instructions().iter().enumerate() {
+            for i in f.instructions().iter() {
                 if let ir::Instr::Label(l) = i {
                     let bb = self.ctx.append_basic_block(func, &format!("l_{}", l));
                     label_blocks.insert(*l, bb);
@@ -53,7 +53,7 @@ impl<'a> Codegen<'a> {
                 inkwell::builder::BuilderError,
             > {
                 match v {
-                    ir::Value::Const(i) => Ok(word.const_int(*i as u64, false)),
+                    ir::Value::Const(i) => Ok(word.const_int(*i, false)),
                     ir::Value::Temp(i) => Ok(self
                         .builder
                         .build_load(word, locals[*i], "loaded")?
