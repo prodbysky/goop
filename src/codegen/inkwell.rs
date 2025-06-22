@@ -174,7 +174,13 @@ impl<'a> Codegen<'a> {
                             a.push(get_value(arg)?.into());
                         }
                         assert!(name.as_str() == "putchar");
-                        self.builder.build_call(putchar, &a, name)?;
+                        if into.is_some() {
+                            let a = self.builder.build_call(putchar, &a, name)?;
+                            self.builder.build_store(locals[into.unwrap()], a.try_as_basic_value().unwrap_left())?;
+                        } else {
+                            self.builder.build_call(putchar, &a, name)?;
+
+                        }
                     }
                 }
             }
@@ -198,7 +204,7 @@ pub fn generate_code(module: ir::Module, no_ext: &str, out_name: &str) {
             &triple,
             "generic",
             "",
-            inkwell::OptimizationLevel::Aggressive,
+            inkwell::OptimizationLevel::None,
             inkwell::targets::RelocMode::Default,
             inkwell::targets::CodeModel::Default,
         )
