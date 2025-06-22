@@ -276,6 +276,14 @@ impl Function {
                     });
                 }
             }
+            Instr::FuncCall { into, .. } => {
+                if into.is_some_and(|into| into >= *self.max_temps()) {
+                    return Err(Error::InvalidValueIndex {
+                        max: self.max_temps,
+                        got: into.unwrap(),
+                    });
+                }
+            }
             _ => unreachable!(),
         }
         self.instructions.push(i);

@@ -19,6 +19,10 @@ impl<'a> Codegen<'a> {
         let llvm_module = self.ctx.create_module("main");
         let word = self.ctx.i64_type();
 
+        word.fn_type(&[word.into()], false);
+        let putchar = llvm_module.add_function("putchar", word.fn_type(&[word.into()], false), None);
+
+
         for f in module.functions() {
             let fn_type = word.fn_type(&[], false);
             let func = llvm_module.add_function(
@@ -162,6 +166,15 @@ impl<'a> Codegen<'a> {
                         self.builder
                             .build_conditional_branch(cmp, *to_block, *otherwise_block)?;
                         has_terminator = true;
+                    }
+                    ir::Instr::FuncCall { name, args, into } => {
+                        let mut a = vec![];
+
+                        for arg in args {
+                            a.push(get_value(arg)?.into());
+                        }
+                        assert!(name.as_str() == "putchar");
+                        self.builder.build_call(putchar, &a, name)?;
                     }
                 }
             }
