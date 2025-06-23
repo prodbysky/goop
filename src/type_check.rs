@@ -161,12 +161,15 @@ pub fn type_check(ast: &parser::AstModule) -> Vec<Spanned<TypeError>> {
     for f in ast.funcs() {
         if funcs.contains_key(&f.v.name) {
             errs.push(Spanned { offset: f.offset, len: f.len, line_beginning: f.line_beginning, v: TypeError::FunctionRedefinition });
-        }
-        if let Err(e) = type_check_function(f, &funcs) {
-            errs.push(e);
         } else {
             funcs.insert(f.v.name.clone(), f.v.get_type());
         }
+    }
+
+    for f in ast.funcs() {
+        if let Err(e) = type_check_function(f, &funcs) {
+            errs.push(e);
+        } 
     }
     errs
 }
@@ -174,7 +177,7 @@ pub fn type_check(ast: &parser::AstModule) -> Vec<Spanned<TypeError>> {
 fn type_check_function(f: &Spanned<parser::Function>, funcs: &HashMap<String, FunctionType>) -> Result<(), Spanned<TypeError>> {
     let mut local_vars = HashMap::new();
     for s in f.v.body() {
-        type_check_statement(&f.v.get_type(), s, &mut local_vars, funcs);
+        type_check_statement(&f.v.get_type(), s, &mut local_vars, funcs)?;
     }
     Ok(())
 }

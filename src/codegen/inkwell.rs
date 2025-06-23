@@ -25,11 +25,16 @@ impl<'a> Codegen<'a> {
 
         for f in module.functions() {
             let fn_type = word.fn_type(&[], false);
-            let func = llvm_module.add_function(
+            llvm_module.add_function(
                 f.name(),
                 fn_type,
                 Some(inkwell::module::Linkage::External),
             );
+
+        }
+
+        for f in module.functions() {
+            let func = llvm_module.get_function(&f.name()).unwrap();
             let block = self.ctx.append_basic_block(func, "entry");
             self.builder.position_at_end(block);
 
