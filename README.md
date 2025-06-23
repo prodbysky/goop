@@ -9,6 +9,18 @@ I want to actually develop something that might be useful,
 and something that's actually finished, since so many
 of my projects just get slapped into `/dev/null`.
 
+## Features
+- `if` statements and `while` loops
+- Functions that can only return values (no arguments)
+
+## Backends supported
+- LLVM via `inkwell`
+
+## TODO
+- Other backends (maybe even generating our own assembly)
+- Function arguments
+- Proper backend value types (not everything being a i64)
+
 ## Hopeful goals for this language
 - [ ] Compiled
 - [ ] Easy C interop
