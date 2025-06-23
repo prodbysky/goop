@@ -232,7 +232,12 @@ fn type_check_statement(
         parser::Statement::Return(v) => {
             let expr_type = get_expr_type(v, vars, funcs)?;
             if expr_type != func.ret {
-
+                return Err(Spanned {
+                    offset: s.offset,
+                    len: s.len,
+                    line_beginning: s.line_beginning,
+                    v: TypeError::MismatchReturnType,
+                });
             }
         }
         parser::Statement::If { cond, body } | parser::Statement::While { cond, body } => {
