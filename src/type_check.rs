@@ -12,6 +12,8 @@ pub enum Type {
     Void,
 }
 
+
+#[derive(Debug)]
 pub struct FunctionType {
     ret: Type,
     args: Vec<Type>,
@@ -30,16 +32,6 @@ pub fn type_from_type_name(name: &str) -> Type {
     todo!()
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum TypeError {
-    UndefinedBinding,
-    UndefinedFunction,
-    TypeMismatch,
-    BoolBinaryOp,
-    NonBoolIfCond,
-    BindingRedefinition,
-    ArgCountMismatch,
-}
 
 fn get_expr_type(
     e: &Spanned<parser::Expression>,
@@ -180,6 +172,7 @@ fn type_check_statement(
     vars: &mut HashMap<String, Type>,
     funcs: &mut HashMap<String, FunctionType>,
 ) -> Result<(), Spanned<TypeError>> {
+    dbg!(&s);
     match &s.v {
         parser::Statement::VarAssign { name, t, expr } => {
             if vars.get(name).is_some() {
@@ -279,9 +272,35 @@ fn type_check_statement(
                 }
             }
         }
-        parser::Statement::FuncDefinition { name, body, ret_type } => {println!("SKIPPING TYPECHECK OF FUNC DEFINITION")}
+        parser::Statement::FuncDefinition { name, body, ret_type } => {
+            if funcs.get(name).is_some() {
+                return Err(Spanned {
+                    offset: s.offset,
+                    len: s.len,
+                    line_beginning: s.line_beginning,
+                    v: TypeError::FunctionRedefinition,
+                });
+            }
+            funcs.insert(name.to_string(), FunctionType { ret: Type::Void, args: vec![] });
+
+            let mut vars = HashMap::new();
+            for s in body {
+                type_check_statement(s, &mut vars, funcs)?;
+            }
+        }
     }
     Ok(())
+}
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum TypeError {
+    UndefinedBinding,
+    UndefinedFunction,
+    TypeMismatch,
+    BoolBinaryOp,
+    NonBoolIfCond,
+    BindingRedefinition,
+    ArgCountMismatch,
+    FunctionRedefinition
 }
 
 impl std::fmt::Display for TypeError {
@@ -349,6 +368,10 @@ impl std::fmt::Display for TypeError {
                     "[{}]\n For now you can't do any type casting so you have to use a comparison result for the condition here",
                     "Note".green()
                 )
+            }
+            Self::FunctionRedefinition => {
+                write!(f, "[{}]\n Found a redefinition of a function", "Error".red())
+
             }
         }
     }
