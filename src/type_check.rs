@@ -15,8 +15,8 @@ pub enum Type {
 
 #[derive(Debug)]
 pub struct FunctionType {
-    ret: Type,
-    args: Vec<Type>,
+    pub ret: Type,
+    pub args: Vec<Type>,
 }
 
 pub fn type_from_type_name(name: &str) -> Type {
@@ -139,8 +139,7 @@ fn get_expr_type(
     }
 }
 
-pub fn type_check(ast: &[Spanned<parser::Statement>]) -> Vec<Spanned<TypeError>> {
-    let mut vars = HashMap::new();
+pub fn type_check(ast: &parser::AstModule) -> Vec<Spanned<TypeError>> {
     let mut funcs = HashMap::new();
     // TODO: HACK
     funcs.insert(
@@ -159,20 +158,33 @@ pub fn type_check(ast: &[Spanned<parser::Statement>]) -> Vec<Spanned<TypeError>>
     );
     let mut errs = vec![];
 
-    for s in ast {
-        if let Err(e) = type_check_statement(s, &mut vars, &mut funcs) {
+    for f in ast.funcs() {
+        if funcs.contains_key(&f.v.name) {
+            errs.push(Spanned { offset: f.offset, len: f.len, line_beginning: f.line_beginning, v: TypeError::FunctionRedefinition });
+        }
+        if let Err(e) = type_check_function(f, &funcs) {
             errs.push(e);
+        } else {
+            funcs.insert(f.v.name.clone(), f.v.get_type());
         }
     }
     errs
 }
 
+fn type_check_function(f: &Spanned<parser::Function>, funcs: &HashMap<String, FunctionType>) -> Result<(), Spanned<TypeError>> {
+    let mut local_vars = HashMap::new();
+    for s in f.v.body() {
+        type_check_statement(&f.v.get_type(), s, &mut local_vars, funcs);
+    }
+    Ok(())
+}
+
 fn type_check_statement(
+    func: &FunctionType,
     s: &Spanned<parser::Statement>,
     vars: &mut HashMap<String, Type>,
-    funcs: &mut HashMap<String, FunctionType>,
+    funcs: &HashMap<String, FunctionType>,
 ) -> Result<(), Spanned<TypeError>> {
-    dbg!(&s);
     match &s.v {
         parser::Statement::VarAssign { name, t, expr } => {
             if vars.get(name).is_some() {
@@ -216,7 +228,9 @@ fn type_check_statement(
         }
         parser::Statement::Return(v) => {
             let expr_type = get_expr_type(v, vars, funcs)?;
-            assert!(expr_type == Type::Int)
+            if expr_type != func.ret {
+
+            }
         }
         parser::Statement::If { cond, body } | parser::Statement::While { cond, body } => {
             let cond_type = get_expr_type(cond, vars, funcs)?;
@@ -232,7 +246,7 @@ fn type_check_statement(
                 }
             };
             for s in body {
-                type_check_statement(s, vars, funcs)?;
+                type_check_statement(func, s, vars, funcs)?;
             }
         }
         parser::Statement::FuncCall { name, args } => {
@@ -272,21 +286,8 @@ fn type_check_statement(
                 }
             }
         }
-        parser::Statement::FuncDefinition { name, body, ret_type } => {
-            if funcs.get(name).is_some() {
-                return Err(Spanned {
-                    offset: s.offset,
-                    len: s.len,
-                    line_beginning: s.line_beginning,
-                    v: TypeError::FunctionRedefinition,
-                });
-            }
-            funcs.insert(name.to_string(), FunctionType { ret: Type::Void, args: vec![] });
-
-            let mut vars = HashMap::new();
-            for s in body {
-                type_check_statement(s, &mut vars, funcs)?;
-            }
+        parser::Statement::FuncDefinition {..} => {
+            unreachable!()
         }
     }
     Ok(())
@@ -300,7 +301,8 @@ pub enum TypeError {
     NonBoolIfCond,
     BindingRedefinition,
     ArgCountMismatch,
-    FunctionRedefinition
+    FunctionRedefinition,
+    MismatchReturnType,
 }
 
 impl std::fmt::Display for TypeError {
@@ -371,7 +373,9 @@ impl std::fmt::Display for TypeError {
             }
             Self::FunctionRedefinition => {
                 write!(f, "[{}]\n Found a redefinition of a function", "Error".red())
-
+            }
+            Self::MismatchReturnType => {
+                write!(f, "[{}]\n You have mismatched the return type of the function", "Error".red())
             }
         }
     }

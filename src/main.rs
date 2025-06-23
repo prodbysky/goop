@@ -8,8 +8,6 @@ mod type_check;
 use clap::Parser;
 use colored::Colorize;
 
-use crate::parser::Statement;
-
 fn main() -> Result<(), ()> {
     let args = config::Args::parse();
     let input = match std::fs::read_to_string(&args.input) {
@@ -41,7 +39,7 @@ fn main() -> Result<(), ()> {
     Ok(())
 }
 
-fn parse_source(input: &str, name: &str) -> Result<Vec<Spanned<Statement>>, ()> {
+fn parse_source(input: &str, name: &str) -> Result<parser::AstModule, ()> {
     let pre_parsing = std::time::Instant::now();
     let tokens: Vec<_> = match lexer::Lexer::new(&input.chars().collect::<Vec<_>>()).lex() {
         Ok(ts) => ts,
@@ -68,7 +66,7 @@ fn parse_source(input: &str, name: &str) -> Result<Vec<Spanned<Statement>>, ()> 
     Ok(program)
 }
 
-fn type_check(program: &[Spanned<Statement>], name: &str, input: &str) -> Result<(), ()> {
+fn type_check(program: &parser::AstModule, name: &str, input: &str) -> Result<(), ()> {
     let pre_t_check = std::time::Instant::now();
     let errs = type_check::type_check(&program);
     println!(
