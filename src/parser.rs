@@ -1,10 +1,42 @@
-use crate::{Spanned, lexer};
+use crate::{Spanned, lexer, type_check};
 use colored::Colorize;
 
 #[derive(Debug)]
 pub struct Parser<'a> {
     tokens: &'a [Spanned<lexer::Token>],
     prev_token: &'a Spanned<lexer::Token>,
+}
+
+
+#[derive(Debug, Default)]
+pub struct AstModule {
+    funcs: Vec<Spanned<Function>>
+}
+
+impl AstModule {
+    pub fn funcs(&self) -> &[Spanned<Function>] {
+        &self.funcs
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Function {
+    pub name: String,
+    ret_type: String,
+    body: Vec<Spanned<Statement>>
+}
+
+
+impl Function {
+    pub fn get_type(&self) -> type_check::FunctionType {
+        type_check::FunctionType {
+            ret: type_check::type_from_type_name(&self.ret_type),
+            args: vec![]
+        }
+    }
+    pub fn body(&self) -> &[Spanned<Statement>] {
+        &self.body
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -18,18 +50,19 @@ impl<'a> Parser<'a> {
         self.tokens.is_empty()
     }
 
-    pub fn parse(mut self) -> (Vec<Spanned<Statement>>, Vec<Spanned<Error>>) {
+    pub fn parse(mut self) -> (AstModule, Vec<Spanned<Error>>) {
         let mut errs = vec![];
-        let mut sts = vec![];
+        let mut module = AstModule::default();
 
         while !self.finished() {
-            match self.parse_statement() {
-                Ok(s) => sts.push(s),
+            match self.parse_function() {
+                Ok(s) => module.funcs.push(s),
                 Err(e) => errs.push(e),
             }
+
         }
 
-        (sts, errs)
+        (module, errs)
     }
 
     fn error_from_last_tk(&self, e: Error) -> Spanned<Error> {
@@ -39,6 +72,26 @@ impl<'a> Parser<'a> {
             line_beginning: self.prev_token.line_beginning,
             v: e,
         }
+    }
+
+    fn parse_function(&mut self) -> Result<Spanned<Function>, Spanned<Error>> {
+        let begin = self.expect(&lexer::Token::Keyword(lexer::Keyword::Func), Error::UnexpectedToken)?;
+        let ident = self.expect_ident(Error::ExpectedFunctionName)?;
+        self.expect(&lexer::Token::OpenParen, Error::ExpectedFunctionArgListBegin)?;
+        self.expect(&lexer::Token::CloseParen, Error::ExpectedFunctionArgListEnd)?;
+        let ret_type = self.expect_ident(Error::ExpectedFunctionReturnType)?;
+        self.expect(&lexer::Token::OpenCurly, Error::ExpectedBlockBegin)?;
+
+        let mut body = vec![];
+        while self
+            .current()
+            .is_some_and(|t| t.v != lexer::Token::CloseCurly)
+        {
+            body.push(self.parse_statement()?);
+        }
+
+        let last = self.expect(&lexer::Token::CloseCurly, Error::ExpectedBlockEnd)?;
+        Ok(Spanned { offset: begin.offset, len: last.offset - begin.offset, line_beginning: begin.line_beginning, v: Function { name: ident.v, body, ret_type: ret_type.v } })
     }
 
     fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
@@ -132,23 +185,7 @@ impl<'a> Parser<'a> {
                     })
                 }
                 lexer::Keyword::Func => {
-                    let begin = self.eat().unwrap();
-                    let ident = self.expect_ident(Error::ExpectedFunctionName)?;
-                    self.expect(&lexer::Token::OpenParen, Error::ExpectedFunctionArgListBegin)?;
-                    self.expect(&lexer::Token::CloseParen, Error::ExpectedFunctionArgListEnd)?;
-                    let ret_type = self.expect_ident(Error::ExpectedFunctionReturnType)?;
-                    self.expect(&lexer::Token::OpenCurly, Error::ExpectedBlockBegin)?;
-
-                    let mut body = vec![];
-                    while self
-                        .current()
-                        .is_some_and(|t| t.v != lexer::Token::CloseCurly)
-                    {
-                        body.push(self.parse_statement()?);
-                    }
-
-                    let last = self.expect(&lexer::Token::CloseCurly, Error::ExpectedBlockEnd)?;
-                    Ok(Spanned { offset: begin.offset, len: last.offset - begin.offset, line_beginning: begin.line_beginning, v: Statement::FuncDefinition { name: ident.v, body, ret_type: ret_type.v } })
+                    Err(self.error_from_last_tk(Error::FunctionDefinitionWithinFunction))
                 }
                 lexer::Keyword::True | lexer::Keyword::False => unreachable!(),
             },
@@ -574,7 +611,9 @@ pub enum Error {
     ExpectedFunctionName,
     ExpectedFunctionArgListBegin,
     ExpectedFunctionArgListEnd,
-    ExpectedFunctionReturnType
+    ExpectedFunctionReturnType,
+    FunctionDefinitionWithinFunction,
+
 }
 
 impl std::fmt::Display for Error {
@@ -693,6 +732,14 @@ impl std::fmt::Display for Error {
                     "[{}]\n  Expected a type name to end the function `header`",
                     "Error".red()
                 )
+            }
+            Self::FunctionDefinitionWithinFunction => {
+                write!(
+                    f,
+                    "[{}]\n  Found an attempt to define a function within a function, that is not allowed",
+                    "Error".red()
+                )
+
             }
         }
     }

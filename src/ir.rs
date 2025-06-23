@@ -1,4 +1,4 @@
-use crate::{Spanned, lexer, parser};
+use crate::{lexer, parser};
 use std::collections::HashMap;
 
 impl Module {
@@ -6,25 +6,16 @@ impl Module {
         Self { functions: vec![] }
     }
 
-    pub fn from_ast(ast: &[Spanned<parser::Statement>]) -> Result<Self, Error> {
+    pub fn from_ast(ast: &parser::AstModule) -> Result<Self, Error> {
         let mut s = Self::new();
 
-        for f in ast.iter().filter(|t| matches!(t.v, parser::Statement::FuncDefinition {..})) {
-            match &f.v {
-                parser::Statement::FuncDefinition { name, body, ret_type: _} => {
-                    let func = s.add_function(name.to_string());
-                    for node in body {
-                        func.add_statement(&node.v)?;
-                    }
-                }
-                _ => unreachable!()
+        for f in ast.funcs() {
+            let func = s.add_function(f.v.name.clone());
+            for statement in f.v.body() {
+                func.add_statement(&statement.v)?;
             }
         }
 
-        let main = s.add_function("main".to_string());
-        for node in ast {
-            main.add_statement(&node.v)?;
-        }
         Ok(s)
     }
 
@@ -40,7 +31,7 @@ impl Module {
             max_labels: 0,
             vars: vec![HashMap::new()],
         });
-        self.functions.first_mut().unwrap()
+        self.functions.last_mut().unwrap()
     }
 }
 
