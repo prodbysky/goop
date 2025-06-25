@@ -23,7 +23,6 @@ fn main() -> Result<(), ()> {
     };
 
     let program = parse_source(&input, &args.input)?;
-    type_check(&program, &args.input, &input)?;
 
     let module = ir::Module::from_ast(&program).unwrap();
 
@@ -64,24 +63,6 @@ fn parse_source(input: &str, name: &str) -> Result<parser::AstModule, ()> {
         pre_parsing.elapsed()
     );
     Ok(program)
-}
-
-fn type_check(program: &parser::AstModule, name: &str, input: &str) -> Result<(), ()> {
-    let pre_t_check = std::time::Instant::now();
-    let errs = type_check::type_check(&program);
-    println!(
-        "[{}]: Type checking took: {:.2?}",
-        "Info".green(),
-        pre_t_check.elapsed()
-    );
-    for e in &errs {
-        eprintln!("{}", e.v);
-        display_diagnostic_info(&input, name, e);
-    }
-    if !errs.is_empty() {
-        return Err(());
-    }
-    Ok(())
 }
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {

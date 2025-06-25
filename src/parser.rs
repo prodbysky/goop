@@ -28,9 +28,9 @@ pub struct Function {
 
 
 impl Function {
-    pub fn get_type(&self) -> type_check::FunctionType {
-        type_check::FunctionType {
-            ret: type_check::type_from_type_name(&self.ret_type),
+    pub fn get_type(&self) -> crate::ir::FunctionType {
+        crate::ir::FunctionType {
+            ret: ir::type_from_type_name(&self.ret_type),
             args: vec![]
         }
     }

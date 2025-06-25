@@ -1,4 +1,16 @@
 #[derive(Debug, Clone)]
+pub struct Module {
+
+}
+
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    name: String,
+    body: Vec<Instr>
+}
+
+#[derive(Debug, Clone)]
 pub enum Instr {
     // Binary Operations
     Assign {
@@ -30,16 +42,6 @@ pub enum Instr {
         r: Value,
         into: TempIndex
     },
-    // Unary operations
-    Negate {
-        l: Value,
-        into: TempIndex
-    },
-    LogicalNot {
-        l: Value,
-        into: TempIndex
-    },
-
     Return {
         v: Option<Value>
     },
