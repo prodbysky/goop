@@ -3,7 +3,6 @@ mod config;
 mod ir;
 mod lexer;
 mod parser;
-mod type_check;
 
 use clap::Parser;
 use colored::Colorize;
@@ -24,7 +23,7 @@ fn main() -> Result<(), ()> {
 
     let program = parse_source(&input, &args.input)?;
 
-    let module = ir::Module::from_ast(&program).unwrap();
+    let module = ir::Module::from_ast(program).unwrap();
 
     let no_ext = &args.input[..args.input.len() - 3];
 

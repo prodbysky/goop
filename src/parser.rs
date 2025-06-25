@@ -790,10 +790,4 @@ pub enum Statement {
         name: String,
         args: Vec<Spanned<Expression>>,
     },
-    // TODO: ARGS
-    FuncDefinition {
-        name: String,
-        body: Vec<Spanned<Statement>>,
-        ret_type: String
-    }
 }
