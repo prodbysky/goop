@@ -1,4 +1,4 @@
-use crate::{Spanned, lexer, type_check};
+use crate::{Spanned, lexer};
 use colored::Colorize;
 
 #[derive(Debug)]
@@ -7,10 +7,9 @@ pub struct Parser<'a> {
     prev_token: &'a Spanned<lexer::Token>,
 }
 
-
 #[derive(Debug, Default)]
 pub struct AstModule {
-    funcs: Vec<Spanned<Function>>
+    funcs: Vec<Spanned<Function>>,
 }
 
 impl AstModule {
@@ -23,15 +22,15 @@ impl AstModule {
 pub struct Function {
     pub name: String,
     ret_type: String,
-    body: Vec<Spanned<Statement>>
+    body: Vec<Spanned<Statement>>,
 }
-
 
 impl Function {
     pub fn get_type(&self) -> crate::ir::FunctionType {
         crate::ir::FunctionType {
-            ret: ir::type_from_type_name(&self.ret_type),
-            args: vec![]
+            name: self.name.clone(),
+            ret: crate::ir::type_from_type_name(&self.ret_type),
+            args: vec![],
         }
     }
     pub fn body(&self) -> &[Spanned<Statement>] {
@@ -59,7 +58,6 @@ impl<'a> Parser<'a> {
                 Ok(s) => module.funcs.push(s),
                 Err(e) => errs.push(e),
             }
-
         }
 
         (module, errs)
@@ -75,9 +73,15 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function(&mut self) -> Result<Spanned<Function>, Spanned<Error>> {
-        let begin = self.expect(&lexer::Token::Keyword(lexer::Keyword::Func), Error::UnexpectedToken)?;
+        let begin = self.expect(
+            &lexer::Token::Keyword(lexer::Keyword::Func),
+            Error::UnexpectedToken,
+        )?;
         let ident = self.expect_ident(Error::ExpectedFunctionName)?;
-        self.expect(&lexer::Token::OpenParen, Error::ExpectedFunctionArgListBegin)?;
+        self.expect(
+            &lexer::Token::OpenParen,
+            Error::ExpectedFunctionArgListBegin,
+        )?;
         self.expect(&lexer::Token::CloseParen, Error::ExpectedFunctionArgListEnd)?;
         let ret_type = self.expect_ident(Error::ExpectedFunctionReturnType)?;
         self.expect(&lexer::Token::OpenCurly, Error::ExpectedBlockBegin)?;
@@ -91,7 +95,16 @@ impl<'a> Parser<'a> {
         }
 
         let last = self.expect(&lexer::Token::CloseCurly, Error::ExpectedBlockEnd)?;
-        Ok(Spanned { offset: begin.offset, len: last.offset - begin.offset, line_beginning: begin.line_beginning, v: Function { name: ident.v, body, ret_type: ret_type.v } })
+        Ok(Spanned {
+            offset: begin.offset,
+            len: last.offset - begin.offset,
+            line_beginning: begin.line_beginning,
+            v: Function {
+                name: ident.v,
+                body,
+                ret_type: ret_type.v,
+            },
+        })
     }
 
     fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
@@ -613,7 +626,6 @@ pub enum Error {
     ExpectedFunctionArgListEnd,
     ExpectedFunctionReturnType,
     FunctionDefinitionWithinFunction,
-
 }
 
 impl std::fmt::Display for Error {
@@ -739,7 +751,6 @@ impl std::fmt::Display for Error {
                     "[{}]\n  Found an attempt to define a function within a function, that is not allowed",
                     "Error".red()
                 )
-
             }
         }
     }

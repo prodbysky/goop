@@ -39,7 +39,7 @@ pub enum Keyword {
     False,
     If,
     While,
-    Func
+    Func,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

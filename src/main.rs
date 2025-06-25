@@ -1,4 +1,4 @@
-mod codegen;
+// mod codegen;
 mod config;
 mod ir;
 mod lexer;
@@ -23,17 +23,24 @@ fn main() -> Result<(), ()> {
 
     let program = parse_source(&input, &args.input)?;
 
-    let module = ir::Module::from_ast(program).unwrap();
+    let module = match ir::Module::from_ast(program) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("{}", e.v);
+            display_diagnostic_info(&input, &args.input, &e);
+            return Err(());
+        }
+    };
 
     let no_ext = &args.input[..args.input.len() - 3];
 
     let pre = std::time::Instant::now();
-    codegen::inkwell::generate_code(module, no_ext, &args.output);
-    println!(
-        "[{}]: Compilation took: {:.2?}",
-        "Info".green(),
-        pre.elapsed()
-    );
+    // codegen::inkwell::generate_code(module, no_ext, &args.output);
+    // println!(
+    //     "[{}]: Compilation took: {:.2?}",
+    //     "Info".green(),
+    //     pre.elapsed()
+    // );
     Ok(())
 }
 
@@ -43,7 +50,7 @@ fn parse_source(input: &str, name: &str) -> Result<parser::AstModule, ()> {
         Ok(ts) => ts,
         Err(e) => {
             eprintln!("{}", e.v);
-            display_diagnostic_info(&input, input, &e);
+            display_diagnostic_info(&input, name, &e);
             return Err(());
         }
     };
@@ -78,7 +85,7 @@ fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e:
     eprintln!("{prefix}\n{}", line);
     eprintln!(
         "{}{}",
-        " ".repeat(e.offset - e.line_beginning),
+        " ".repeat(e.offset - e.line_beginning + 7),
         "^".repeat(e.len)
     );
 }
