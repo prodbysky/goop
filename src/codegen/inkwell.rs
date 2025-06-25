@@ -1,5 +1,4 @@
 use crate::ir;
-use crate::lexer;
 
 struct Codegen<'a> {
     ctx: &'a inkwell::context::Context,
@@ -17,20 +16,33 @@ impl<'a> Codegen<'a> {
         module: ir::Module,
     ) -> Result<inkwell::module::Module, inkwell::builder::BuilderError> {
         let llvm_module = self.ctx.create_module("main");
-        let word = self.ctx.i64_type();
+        let u64_type = self.ctx.i64_type();
+        let char_type = self.ctx.i8_type();
+        let bool_type = self.ctx.bool_type();
         let void = self.ctx.void_type();
 
-        llvm_module.add_function("putchar", void.fn_type(&[word.into()], false), None);
-        llvm_module.add_function("getchar", word.fn_type(&[], false), None);
+        llvm_module.add_function("putchar", void.fn_type(&[char_type.into()], false), None);
+        llvm_module.add_function("getchar", char_type.fn_type(&[], false), None);
 
         for f in module.functions() {
-            let fn_type = word.fn_type(&[], false);
-            llvm_module.add_function(
-                f.name(),
-                fn_type,
-                Some(inkwell::module::Linkage::External),
-            );
-
+            let fn_type_ir = f.get_type();
+            let ret_type = match fn_type_ir.ret {
+                ir::Type::U64 => u64_type,
+                ir::Type::Bool => bool_type,
+                ir::Type::Char => char_type,
+                ir::Type::Void => todo!("i dont know what to do here"),
+            };
+            let mut args = vec![];
+            for arg in fn_type_ir.args {
+                args.push(match arg {
+                    ir::Type::U64 => u64_type,
+                    ir::Type::Bool => bool_type,
+                    ir::Type::Char => char_type,
+                    ir::Type::Void => todo!("i dont know what to do here"),
+                }.into());
+            }
+            let fn_type = ret_type.fn_type(&args, false);
+            llvm_module.add_function(f.name(), fn_type, Some(inkwell::module::Linkage::External));
         }
 
         for f in module.functions() {
@@ -39,13 +51,29 @@ impl<'a> Codegen<'a> {
             self.builder.position_at_end(block);
 
             let mut locals = vec![];
-            for _ in 0..*f.max_temps() {
-                locals.push(self.builder.build_alloca(word, "t")?);
+            for t in f.temps() {
+                match t {
+                   ir::Value::Temp { t, i } => {
+                       match t {
+                           ir::Type::Char => {
+                                locals.push(self.builder.build_alloca(char_type, "temp_char")?);
+                           }
+                           ir::Type::Void => unreachable!(),
+                           ir::Type::Bool => {
+                                locals.push(self.builder.build_alloca(bool_type, "temp_bool")?);
+                           }
+                           ir::Type::U64 => {
+                                locals.push(self.builder.build_alloca(u64_type, "temp_int")?);
+                           }
+                       }
+                   }
+                   _ => todo!()
+                }
             }
 
             let mut label_blocks = std::collections::HashMap::new();
 
-            for i in f.instructions().iter() {
+            for i in f.body().iter() {
                 if let ir::Instr::Label(l) = i {
                     let bb = self.ctx.append_basic_block(func, &format!("l_{}", l));
                     label_blocks.insert(*l, bb);
@@ -57,83 +85,108 @@ impl<'a> Codegen<'a> {
                 inkwell::builder::BuilderError,
             > {
                 match v {
-                    ir::Value::Const(i) => Ok(word.const_int(*i, false)),
-                    ir::Value::Temp(i) => Ok(self
+                    ir::Value::Const { t: ir::Type::U64, v } => {
+                        Ok(u64_type.const_int(*v, false))
+                    }
+                    ir::Value::Const { t: ir::Type::Char, v } => {
+                        Ok(char_type.const_int(*v, false))
+                    }
+                    ir::Value::Const { t: ir::Type::Bool, v } => {
+                        Ok(bool_type.const_int(*v, false))
+                    }
+                    ir::Value::Const { t: ir::Type::Void, v } => {
+                        unreachable!()
+                    }
+                    ir::Value::Temp{t: ir::Type::U64, i} => Ok(self
                         .builder
-                        .build_load(word, locals[*i], "loaded")?
+                        .build_load(u64_type, locals[*i], "loaded")?
                         .into_int_value()),
+                    ir::Value::Temp{t: ir::Type::Char, i} => Ok(self
+                        .builder
+                        .build_load(char_type, locals[*i], "loaded")?
+                        .into_int_value()),
+                    ir::Value::Temp{t: ir::Type::Bool, i} => Ok(self
+                        .builder
+                        .build_load(bool_type, locals[*i], "loaded")?
+                        .into_int_value()),
+                    ir::Value::Temp{t: ir::Type::Void, i} => unreachable!()
                 }
             };
 
             let mut current_block = block;
             let mut has_terminator = false;
 
-            for i in f.instructions() {
+            for i in f.body() {
                 match i {
                     ir::Instr::Assign { index, v } => {
                         let val = get_value(v)?;
                         self.builder.build_store(locals[*index], val)?;
                     }
-                    ir::Instr::BinaryOp { op, l, r, into } => {
+                    ir::Instr::Add { l, r, into } => {
                         let left = get_value(l)?;
                         let right = get_value(r)?;
-                        let result = match op {
-                            lexer::Operator::Plus => {
-                                self.builder.build_int_add(left, right, "add")?
-                            }
-                            lexer::Operator::Minus => {
-                                self.builder.build_int_sub(left, right, "sub")?
-                            }
-                            lexer::Operator::Star => {
-                                self.builder.build_int_mul(left, right, "mul")?
-                            }
-                            lexer::Operator::Slash => {
-                                self.builder.build_int_signed_div(left, right, "div")?
-                            }
-                            lexer::Operator::Percent => {
-                                self.builder.build_int_signed_rem(left, right, "rem")?
-                            }
-                            lexer::Operator::Less => {
-                                let cmp = self.builder.build_int_compare(
-                                    inkwell::IntPredicate::SLT,
-                                    left,
-                                    right,
-                                    "lt",
-                                )?;
-                                self.builder.build_int_z_extend(cmp, word, "ext")?
-                            }
-                            lexer::Operator::More => {
-                                let cmp = self.builder.build_int_compare(
-                                    inkwell::IntPredicate::SGT,
-                                    left,
-                                    right,
-                                    "gt",
-                                )?;
-                                self.builder.build_int_z_extend(cmp, word, "ext")?
-                            }
-                            _ => panic!("Unsupported binary operator: {:?}", op),
-                        };
+                        let result = self.builder.build_int_add(left, right, "add")?;
                         self.builder.build_store(locals[*into], result)?;
                     }
-                    ir::Instr::UnaryOp { op, r, into } => {
+                    ir::Instr::Sub { l, r, into } => {
+                        let left = get_value(l)?;
                         let right = get_value(r)?;
-                        let result = match op {
-                            lexer::Operator::Minus => self.builder.build_int_neg(right, "neg")?,
-                            lexer::Operator::Not => {
-                                let cmp = self.builder.build_int_compare(
-                                    inkwell::IntPredicate::EQ,
-                                    right,
-                                    word.const_int(0, false),
-                                    "not",
-                                )?;
-                                self.builder.build_int_z_extend(cmp, word, "ext")?
-                            }
-                            _ => panic!("Unsupported unary operator: {:?}", op),
-                        };
+                        let result = self.builder.build_int_sub(left, right, "sub")?;
                         self.builder.build_store(locals[*into], result)?;
                     }
-                    ir::Instr::Return { value } => {
-                        let val = get_value(value)?;
+                    ir::Instr::Mul { l, r, into } => {
+                        let left = get_value(l)?;
+                        let right = get_value(r)?;
+                        let result = self.builder.build_int_mul(left, right, "mul")?;
+                        self.builder.build_store(locals[*into], result)?;
+                    }
+                    ir::Instr::Div { l, r, into } => {
+                        let left = get_value(l)?;
+                        let right = get_value(r)?;
+                        let result = self.builder.build_int_signed_div(left, right, "div")?;
+                        self.builder.build_store(locals[*into], result)?;
+                    }
+                    ir::Instr::Mod { l, r, into } => {
+                        let left = get_value(l)?;
+                        let right = get_value(r)?;
+                        let result = self.builder.build_int_signed_rem(left, right, "mod")?;
+                        self.builder.build_store(locals[*into], result)?;
+                    }
+                    ir::Instr::Less { l, r, into } => {
+                        let left = get_value(l)?;
+                        let right = get_value(r)?;
+                        let cmp = self.builder.build_int_compare(
+                            inkwell::IntPredicate::SLT,
+                            left,
+                            right,
+                            "lt",
+                        )?;
+                        self.builder.build_store(locals[*into], cmp)?;
+                    }
+                    ir::Instr::More { l, r, into } => {
+                        let left = get_value(l)?;
+                        let right = get_value(r)?;
+                        let cmp = self.builder.build_int_compare(
+                            inkwell::IntPredicate::SGT,
+                            left,
+                            right,
+                            "gt",
+                        )?;
+                        self.builder.build_store(locals[*into], cmp)?;
+                    }
+                    ir::Instr::LogicalNot { r, into } => {
+                        let right = get_value(r)?;
+                        let cmp = self.builder.build_int_compare(
+                            inkwell::IntPredicate::EQ,
+                            right,
+                            u64_type.const_int(0, false),
+                            "not",
+                        )?;
+                        self.builder.build_store(locals[*into], cmp)?;
+                    }
+                    ir::Instr::Return { v: value } => {
+                        let v = value.clone().unwrap();
+                        let val = get_value(&v)?;
                         self.builder.build_return(Some(&val))?;
                         has_terminator = true;
                     }
@@ -154,7 +207,7 @@ impl<'a> Codegen<'a> {
                             has_terminator = true;
                         }
                     }
-                    ir::Instr::JumpNotZero {
+                    ir::Instr::Jnz {
                         cond,
                         to,
                         otherwise,
@@ -165,14 +218,14 @@ impl<'a> Codegen<'a> {
                         let cmp = self.builder.build_int_compare(
                             inkwell::IntPredicate::NE,
                             val,
-                            word.const_int(0, false),
+                            bool_type.const_int(0, false),
                             "cmp",
                         )?;
                         self.builder
                             .build_conditional_branch(cmp, *to_block, *otherwise_block)?;
                         has_terminator = true;
                     }
-                    ir::Instr::FuncCall { name, args, into } => {
+                    ir::Instr::Call { name, args, into } => {
                         let mut a = vec![];
 
                         for arg in args {
@@ -193,7 +246,7 @@ impl<'a> Codegen<'a> {
             }
 
             if !has_terminator && current_block.get_terminator().is_none() {
-                self.builder.build_return(Some(&word.const_int(0, false)))?;
+                self.builder.build_return(Some(&u64_type.const_int(0, false)))?;
             }
         }
         Ok(llvm_module)
@@ -219,6 +272,7 @@ pub fn generate_code(module: ir::Module, no_ext: &str, out_name: &str) {
     let mut cg = Codegen::new(&ctx);
 
     let module = cg.gen_module(module).unwrap();
+    // module.print_to_stderr();
 
     let assembly_name = format!("{no_ext}.s");
     module.verify().unwrap();

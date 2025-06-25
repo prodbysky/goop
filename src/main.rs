@@ -3,7 +3,6 @@ mod config;
 mod ir;
 mod lexer;
 mod parser;
-mod type_check;
 
 use clap::Parser;
 use colored::Colorize;
@@ -23,9 +22,15 @@ fn main() -> Result<(), ()> {
     };
 
     let program = parse_source(&input, &args.input)?;
-    type_check(&program, &args.input, &input)?;
 
-    let module = ir::Module::from_ast(&program).unwrap();
+    let module = match ir::Module::from_ast(program) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("{}", e.v);
+            display_diagnostic_info(&input, &args.input, &e);
+            return Err(());
+        }
+    };
 
     let no_ext = &args.input[..args.input.len() - 3];
 
@@ -45,7 +50,7 @@ fn parse_source(input: &str, name: &str) -> Result<parser::AstModule, ()> {
         Ok(ts) => ts,
         Err(e) => {
             eprintln!("{}", e.v);
-            display_diagnostic_info(&input, input, &e);
+            display_diagnostic_info(&input, name, &e);
             return Err(());
         }
     };
@@ -66,24 +71,6 @@ fn parse_source(input: &str, name: &str) -> Result<parser::AstModule, ()> {
     Ok(program)
 }
 
-fn type_check(program: &parser::AstModule, name: &str, input: &str) -> Result<(), ()> {
-    let pre_t_check = std::time::Instant::now();
-    let errs = type_check::type_check(&program);
-    println!(
-        "[{}]: Type checking took: {:.2?}",
-        "Info".green(),
-        pre_t_check.elapsed()
-    );
-    for e in &errs {
-        eprintln!("{}", e.v);
-        display_diagnostic_info(&input, name, e);
-    }
-    if !errs.is_empty() {
-        return Err(());
-    }
-    Ok(())
-}
-
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
     let line_offset = e.offset - e.line_beginning;
     let line_end = input[e.line_beginning..].find('\n').unwrap_or(input.len()) + e.line_beginning;
@@ -98,7 +85,7 @@ fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e:
     eprintln!("{prefix}\n{}", line);
     eprintln!(
         "{}{}",
-        " ".repeat(e.offset - e.line_beginning),
+        " ".repeat(e.offset - e.line_beginning + 7),
         "^".repeat(e.len)
     );
 }
