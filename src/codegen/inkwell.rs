@@ -218,7 +218,7 @@ impl<'a> Codegen<'a> {
                         let cmp = self.builder.build_int_compare(
                             inkwell::IntPredicate::NE,
                             val,
-                            u64_type.const_int(0, false),
+                            bool_type.const_int(0, false),
                             "cmp",
                         )?;
                         self.builder
