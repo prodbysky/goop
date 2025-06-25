@@ -58,6 +58,10 @@ impl Module {
     fn get_function_mut(&mut self, name: &str) -> Option<&mut Function> {
         self.functions.iter_mut().find(|v| v.name.as_str() == name)
     }
+
+    pub fn functions(&self) -> &[Function] {
+        &self.functions
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +92,9 @@ pub struct Function {
 }
 
 impl Function {
+    pub fn get_type(&self) -> FunctionType {
+        FunctionType { name: self.name.clone(), ret: self.ret_type.clone(), args: vec![] }
+    }
     fn add_statement(
         &mut self,
         s: &Spanned<parser::Statement>,
@@ -395,6 +402,17 @@ impl Function {
         let idx = self.max_labels;
         self.max_labels += 1;
         idx
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn temps(&self) -> &[Value] {
+        &self.values
+    }
+
+    pub fn body(&self) -> &[Instr] {
+        &self.body
     }
 }
 

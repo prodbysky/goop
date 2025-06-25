@@ -1,4 +1,4 @@
-// mod codegen;
+mod codegen;
 mod config;
 mod ir;
 mod lexer;
@@ -35,12 +35,12 @@ fn main() -> Result<(), ()> {
     let no_ext = &args.input[..args.input.len() - 3];
 
     let pre = std::time::Instant::now();
-    // codegen::inkwell::generate_code(module, no_ext, &args.output);
-    // println!(
-    //     "[{}]: Compilation took: {:.2?}",
-    //     "Info".green(),
-    //     pre.elapsed()
-    // );
+    codegen::inkwell::generate_code(module, no_ext, &args.output);
+    println!(
+        "[{}]: Compilation took: {:.2?}",
+        "Info".green(),
+        pre.elapsed()
+    );
     Ok(())
 }
 
