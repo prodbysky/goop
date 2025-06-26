@@ -1,5 +1,6 @@
 use crate::Spanned;
 use colored::Colorize;
+use crate::logging;
 
 #[derive(Debug)]
 pub struct Lexer<'a> {
@@ -287,37 +288,24 @@ impl<'a> Lexer<'a> {
     }
 }
 
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            Self::UnexpectedChar(c) => {
-                writeln!(
+            Self::UnexpectedChar(_c) => {
+                logging::errorln!(f, "unexpected char found during lexing")?;
+                logging::helpln!(
                     f,
-                    "[{}]\n  Unexpected char found during lexing `{c}`",
-                    "Error".red()
-                )?;
-                write!(
-                    f,
-                    "[{}]\n  If the arrow is pointing at whitespace, try retyping the line since you might have inserted invisible unicode characters.\n  If this error still occurs this is a bug in the compiler, please report it in the issues tab of the github repository",
-                    "Help".blue()
-                )
+                    "If the arrow is pointing at whitespace, try retyping the line since you might have inserted invisible unicode characters.\n  If this error still occurs this is a bug in the compiler, please report it in the issues tab of the github repository")
             }
             Self::InvalidNumberLiteral => {
-                writeln!(
+                logging::errorln!(f, "Invalid number literal found during lexing")?;
+                logging::noteln!(
                     f,
-                    "[{}]\n  Invalid number literal found during lexing",
-                    "Error".red()
-                )?;
-                writeln!(
+                    "Numbers must be separated by whitespace or other characters that are not a..z etc.\n  For example this `123 123` is two valid number literals\n  `123a 123a` is not.")?;
+                logging::help!(
                     f,
-                    "[{}]\n  Numbers must be separated by whitespace or other characters that are not a..z etc.\n  For example this `123 123` is two valid number literals\n  `123a 123a` is not.",
-                    "Note".green()
-                )?;
-                write!(
-                    f,
-                    "[{}]\n  You might have tried to use a binary (0b) or hexadecimal (0x) literal. They are not supported as of now",
-                    "Help".blue()
-                )
+                    "You might have tried to use a binary (0b) or hexadecimal (0x) literal. They are not supported as of now")
             }
         }
     }

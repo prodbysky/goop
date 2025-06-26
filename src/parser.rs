@@ -1,4 +1,4 @@
-use crate::{Spanned, lexer};
+use crate::{Spanned, lexer, logging};
 use colored::Colorize;
 
 #[derive(Debug)]
@@ -632,125 +632,55 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ExpectedPrimaryExpresion => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a primary expression here\n  [{}]: A primary expression is only a number literal for now",
-                    "Error".red(),
-                    "Note".green()
-                )
+                logging::error!(f, "Expected a primary expression here")
             }
             Self::UnexpectedTokenInExpression => {
-                write!(
-                    f,
-                    "[{}]\n  Unexpected token found when parsing an expression here",
-                    "Error".red(),
-                )
+                logging::error!(f, "Unexpected token found when parsing an expression here")
             }
             Self::ExpectedBinaryOperator => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a binary operator here\n  [{}]\n  A binary operator in Goop can only be one of these: `+`, `-`, `*', `/`",
-                    "Error".red(),
-                    "Note".green(),
-                )
+                logging::error!(f, "Expected a binary operator here")
             }
             Self::UnclosedParenthesis => {
-                write!(
-                    f,
-                    "[{}]\n  Found unbalanced parenthesis when parsing an enclosed expression",
-                    "Error".red(),
-                )
+                logging::error!(f, "Found unbalanced parenthesis when parsing an enclosed expression")
             }
             Self::UnexpectedToken => {
-                write!(
-                    f,
-                    "[{}]\n  Found an unexpected token when parsing statement",
-                    "Error".red()
-                )
+                logging::error!(f, "Found an unexpected token when parsing statement")
             }
             Self::ExpectedIdentifier => {
-                write!(
-                    f,
-                    "[{}]\n  Expected an identifier here (variable name?)",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected an identifier here (variable name?)")
             }
             Self::ExpectedSemicolonAfterStatement => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a semicolon here to terminate a statement",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected a semicolon here to terminate a statement")
             }
             Self::ExpectedBlockBegin => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a `{{` here to start a block, for a `if` or `while` statement",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected a `{{` here to start a block, for a `if` or `while` statement")
             }
             Self::ExpectedBlockEnd => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a `}}` here to end a block, of a `if` or `while` statement",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected a `}}` here to end a block, of a `if` or `while` statement")
             }
             Self::ExpectedBindingName => {
-                write!(
-                    f,
-                    "[{}]\n  Expected here to be a name for a variable",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected here to be a name for a variable")
             }
             Self::ExpectedTypeName => {
-                write!(
-                    f,
-                    "[{}]\n  Expected here to be a name of a type",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected here to be a name of a type")
             }
             Self::ExpectedColonAfterLetBindingName => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a colon separator after the name of a variable",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected a colon separator after the name of a variable")
             }
             Self::ExpectedFunctionName => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a function name to be here",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected a function name to be here")
             }
             Self::ExpectedFunctionArgListBegin => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a `(` to begin a function argument list",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected a `(` to begin a function argument list")
             }
             Self::ExpectedFunctionArgListEnd => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a `)` to end a function argument list",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected a `)` to end a function argument list")
             }
             Self::ExpectedFunctionReturnType => {
-                write!(
-                    f,
-                    "[{}]\n  Expected a type name to end the function `header`",
-                    "Error".red()
-                )
+                logging::error!(f, "Expected a type name to end the function `header`")
             }
             Self::FunctionDefinitionWithinFunction => {
-                write!(
-                    f,
-                    "[{}]\n  Found an attempt to define a function within a function, that is not allowed",
-                    "Error".red()
-                )
+                logging::error!(f, "Found an attempt to define a function within a function, that is not allowed")
             }
         }
     }

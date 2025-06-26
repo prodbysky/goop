@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Spanned, parser};
+use crate::{Spanned, parser, logging};
 use colored::Colorize;
 
 #[derive(Debug, Clone)]
@@ -447,86 +447,53 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UndefinedFunction => {
-                writeln!(
-                    f,
-                    "[{}]\n  You tried to call an undefined function",
-                    "Error".red()
-                )?;
-                write!(
-                    f,
-                    "[{}]\n  Maybe you have misspelled the name?",
-                    "Help".green()
-                )
+                logging::errorln!(f, "You tried to call an undefined function")?;
+                logging::help!(f, "Maybe you have misspelled the name?")
             }
             Self::UndefinedVariable => {
-                writeln!(
-                    f,
-                    "[{}]\n  You tried to use an undefined variable",
-                    "Error".red()
-                )?;
-                write!(
-                    f,
-                    "[{}]\n  Maybe you have misspelled the name?",
-                    "Help".green()
-                )
+                logging::errorln!(f, "You tried to use an undefined variable")?;
+                logging::help!(f, "Maybe you have misspelled the name?")
             }
             Self::NotBooleanCondition => {
-                write!(
-                    f,
-                    "[{}]\n  You tried to use a non-boolean condition in a `if` or `while` statement",
-                    "Error".red()
-                )
+                logging::error!(f, "You tried to use a non-boolean condition in a `if` or `while` statement")
             }
             Self::UndefinedVariableRedefinition => {
-                writeln!(
+                logging::errorln!(
                     f,
-                    "[{}]\n  You tried to redefine an undefined variable",
-                    "Error".red()
+                    "You tried to redefine an undefined variable",
                 )?;
-                write!(
+                logging::help!(
                     f,
-                    "[{}]\n  Maybe you have misspelled the name?",
-                    "Help".green()
+                    "Maybe you have misspelled the name?",
                 )
             }
             Self::MismatchedArgumentTypes { callee_type, .. } => {
-                writeln!(
+                logging::errorln!(
                     f,
-                    "[{}]\n  Called a function with mismatched argument types",
-                    "Error".red()
+                    "Called a function with mismatched argument types",
                 )?;
-                write!(f, "[{}]\n  Callee type: {callee_type}", "Note".blue())
+                logging::note!(f, "Callee type: {callee_type}")
             }
             Self::MismatchedArgumentCount { callee_type, .. } => {
-                writeln!(
+                logging::errorln!(
                     f,
-                    "[{}]\n  Called a function with either not enough or too many arguments ",
-                    "Error".red()
+                    "Called a function with either not enough or too many arguments",
                 )?;
-                write!(f, "[{}]\n  Callee type: {callee_type}", "Note".blue())
+                logging::note!(f, "Callee type: {callee_type}")
             }
             Self::UnexpectedType { got, expect } => {
-                writeln!(f, "[{}]\n  You mismatched some types", "Error".red())?;
-                write!(
+                logging::errorln!(f, "You mismatched some types")?;
+                logging::note!(
                     f,
-                    "[{}]\n  Expected: {expect:?}, got: {got:?}",
-                    "Note".blue()
+                    "Expected: {expect:?}, got: {got:?}",
                 )
             }
             Self::MismatchedReturnType { got, expect } => {
-                writeln!(
-                    f,
-                    "[{}]\n  You tried to return a value that does not match the functions expected return type",
-                    "Error".red()
-                )?;
-                write!(
-                    f,
-                    "[{}]\n  Expected: {expect:?}, got: {got:?}",
-                    "Note".blue()
-                )
+                logging::errorln!(f, "You tried to return a value that does not match the functions expected return type")?;
+                logging::note!(f, "Expected: {expect:?}, got: {got:?}")
             }
             Self::VariableRedefinition => {
-                write!(f, "[{}]\n  You tried to redefine a variable", "Error".red())
+                logging::error!(f, "You tried to redefine a variable")
             }
         }
     }

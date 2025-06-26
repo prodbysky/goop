@@ -3,6 +3,8 @@ mod config;
 mod ir;
 mod lexer;
 mod parser;
+mod logging;
+
 
 use clap::Parser;
 use colored::Colorize;
