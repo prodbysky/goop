@@ -82,41 +82,62 @@ impl<'a> Parser<'a> {
     }
 
     /// return Optional[Expression];
+    /// NOTE: For now we assume that the return value is not void
     fn parse_return(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
         let begin = self.next().unwrap();
-        todo!("parse_return")
+        let expr = self.parse_expression()?;
+        let end = self.expect_semicolon()?;
+        Ok(Spanned { offset: begin.offset, len: end.offset - begin.offset, line_beginning: begin.line_beginning, v: Statement::Return { value: Some(expr) } })
     }
 
     /// if [expr] { ... }
     /// NOTE: The `expr` has to be a boolean
     fn parse_if(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
         let begin = self.next().unwrap();
-        todo!("parse_if")
+        let cond = self.parse_expression()?;
+        let (body, end) = self.parse_block()?;
+        Ok(Spanned { offset: begin.offset, len: end.offset - begin.offset, line_beginning: begin.line_beginning, v: Statement::If {cond, body} })
     }
 
     /// while [expr] { ... }
     /// NOTE: The `expr` has to be a boolean
     fn parse_while(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
         let begin = self.next().unwrap();
-        todo!("parse_while")
+        let cond = self.parse_expression()?;
+        let (body, end) = self.parse_block()?;
+        Ok(Spanned { offset: begin.offset, len: end.offset - begin.offset, line_beginning: begin.line_beginning, v: Statement::While {cond, body} })
     }
 
     /// let [name]: [type_name] = [expr];
     /// NOTE: The `expr` has to be a boolean
     fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
         let begin = self.next().unwrap();
-        todo!("parse_let")
+        let name = self.expect_name()?.v;
+        self.expect_token(Token::Colon)?;
+        let type_name = self.expect_name()?.v;
+        self.expect_token(Token::Assign)?;
+        let value = self.parse_expression()?;
+        let end = self.expect_semicolon()?;
+        Ok(Spanned { offset: begin.offset, len: end.offset - begin.offset, line_beginning: begin.line_beginning, v: Statement::Assign { name, type_name, value }  })
     }
 
     /// [name] = [expr];
     /// NOTE: `expr` has to be the same type as the previous value of the variable
     fn parse_assign(&mut self, begin_token: &Spanned<String>) -> Result<Spanned<Statement>, Spanned<Error>> {
-        todo!("parse_assign")
+        let name = begin_token.v.clone();
+        self.expect_token(Token::Assign)?;
+        let value = self.parse_expression()?;
+        let end = self.expect_semicolon()?;
+        Ok(Spanned { offset: begin_token.offset, len: end.offset - begin_token.offset, line_beginning: begin_token.line_beginning, v: Statement::Reassign { name, value }  })
     }
 
     /// [func_name]([name]*);
     fn parse_call(&mut self, begin_token: &Spanned<String>) -> Result<Spanned<Statement>, Spanned<Error>> {
         todo!("parse_call")
+    }
+
+    fn parse_expression(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
+        todo!("parse_expression")
     }
 
     fn expect_token(&mut self, t: Token) -> Result<Spanned<Token>, Spanned<Error>> {
@@ -146,6 +167,10 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn expect_semicolon(&mut self) -> Result<Spanned<Token>, Spanned<Error>> {
+        self.expect_token(Token::Semicolon)
+    }
+
     fn finished(&self) -> bool {
         self.tokens.is_empty()
     }
@@ -158,8 +183,8 @@ impl<'a> Parser<'a> {
         self.tokens.first().cloned()
     }
 
-    fn next(&mut self) -> Option<&Spanned<Token>> {
-        let tk = self.tokens.first().clone();
+    fn next(&mut self) -> Option<Spanned<Token>> {
+        let tk = self.tokens.first().cloned();
         self.tokens = &self.tokens[1..];
         tk 
     }
@@ -195,6 +220,23 @@ pub struct Function {
 pub enum Statement {
     Return {
         value: Option<Spanned<Expression>>,
+    },
+    If {
+        cond: Spanned<Expression>,
+        body: Vec<Spanned<Statement>>
+    },
+    While {
+        cond: Spanned<Expression>,
+        body: Vec<Spanned<Statement>>
+    },
+    Assign {
+        name: String,
+        type_name: String,
+        value: Spanned<Expression>
+    },
+    Reassign {
+        name: String,
+        value: Spanned<Expression>
     }
 }
 
