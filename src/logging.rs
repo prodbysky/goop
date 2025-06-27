@@ -33,11 +33,11 @@ macro_rules! noteln {
     };
 }
 
-pub(crate) use errorln;
 pub(crate) use error;
+pub(crate) use errorln;
 
-pub(crate) use helpln;
 pub(crate) use help;
+pub(crate) use helpln;
 
-pub(crate) use noteln;
 pub(crate) use note;
+pub(crate) use noteln;
