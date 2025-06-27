@@ -54,7 +54,69 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
-        todo!("parse_statement")
+        match self.peek() {
+            Some(Spanned { v: Token::Keyword(Keyword::Return), .. }) => self.parse_return(),
+            Some(Spanned { v: Token::Keyword(Keyword::If), .. }) => self.parse_if(),
+            Some(Spanned { v: Token::Keyword(Keyword::While), .. }) => self.parse_while(),
+            Some(Spanned { v: Token::Keyword(Keyword::Let), .. }) => self.parse_let(),
+            Some(Spanned { v: Token::Keyword(Keyword::Func), .. }) => Err(self.spanned_error_from_last_tk(Error::NestedFunctionDefinition)),
+            Some(Spanned { v: Token::Keyword(Keyword::True | Keyword::False), .. }) => Err(self.spanned_error_from_last_tk(Error::BooleanExpressionAsStatement)),
+            Some(Spanned { v: Token::Identifier(name), offset, len, line_beginning }) => {
+                self.next().unwrap();
+                match self.peek() {
+                    Some(Spanned { v: Token::Assign, .. }) => {
+                        self.next();
+                        self.parse_assign(&Spanned { offset, len, line_beginning, v: name })
+                    }
+                    Some(Spanned { v: Token::OpenParen, .. }) => {
+                        self.next();
+                        self.parse_call(&Spanned { offset, len, line_beginning, v: name })
+                    }
+                    None => Err(self.spanned_error_from_last_tk(Error::UnexpectedTokenAfterIdentifierInStatement { got: None })),
+                    Some(Spanned { v, .. }) => Err(self.spanned_error_from_last_tk(Error::UnexpectedTokenAfterIdentifierInStatement { got: Some(v) }))
+                }
+            }
+            None => Err(self.spanned_error_from_last_tk(Error::ExpectedStartOfStatement)),
+            Some(_) => Err(self.spanned_error_from_last_tk(Error::ExpectedStartOfStatement))
+        }
+    }
+
+    /// return Optional[Expression];
+    fn parse_return(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let begin = self.next().unwrap();
+        todo!("parse_return")
+    }
+
+    /// if [expr] { ... }
+    /// NOTE: The `expr` has to be a boolean
+    fn parse_if(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let begin = self.next().unwrap();
+        todo!("parse_if")
+    }
+
+    /// while [expr] { ... }
+    /// NOTE: The `expr` has to be a boolean
+    fn parse_while(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let begin = self.next().unwrap();
+        todo!("parse_while")
+    }
+
+    /// let [name]: [type_name] = [expr];
+    /// NOTE: The `expr` has to be a boolean
+    fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let begin = self.next().unwrap();
+        todo!("parse_let")
+    }
+
+    /// [name] = [expr];
+    /// NOTE: `expr` has to be the same type as the previous value of the variable
+    fn parse_assign(&mut self, begin_token: &Spanned<String>) -> Result<Spanned<Statement>, Spanned<Error>> {
+        todo!("parse_assign")
+    }
+
+    /// [func_name]([name]*);
+    fn parse_call(&mut self, begin_token: &Spanned<String>) -> Result<Spanned<Statement>, Spanned<Error>> {
+        todo!("parse_call")
     }
 
     fn expect_token(&mut self, t: Token) -> Result<Spanned<Token>, Spanned<Error>> {
@@ -142,7 +204,11 @@ pub enum Expression {
 }
 
 pub enum Error {
-    ExpectedToken {expected: Token, got: Option<Token>}
+    ExpectedToken {expected: Token, got: Option<Token>},
+    ExpectedStartOfStatement,
+    NestedFunctionDefinition,
+    BooleanExpressionAsStatement,
+    UnexpectedTokenAfterIdentifierInStatement{got: Option<Token>}
 }
 
 impl std::fmt::Display for Error {
@@ -154,6 +220,25 @@ impl std::fmt::Display for Error {
                     Some(v) => format!("{v:?}")
                 };
                 logging::error!(f, "Expected {expected:?}, instead got {got_name}")
+            }
+            Self::ExpectedStartOfStatement => {
+                logging::error!(f, "Expected start of statement")
+            }
+            Self::NestedFunctionDefinition => {
+                logging::error!(f, "Nested function definitions are not allowed YET")
+            }
+            Self::BooleanExpressionAsStatement => {
+                logging::error!(f, "Found an attempt to use a boolean (`true` or `false`) as a statement")
+            }
+            Self::UnexpectedTokenAfterIdentifierInStatement { got } => {
+                let got_name = match got {
+                    None => "nothing".to_string(),
+                    Some(v) => format!("{v:?}")
+                };
+                logging::errorln!(f, "Unexpected token found after an identifier in a statement context: {got_name}")?;
+                logging::helpln!(f, "After that name you can put a parenthesis pair to make a function call or make a assigment operation")?;
+                logging::noteln!(f, "Function call: name(...)")?;
+                logging::note!(f, "Assignment: name = ...")
             }
         } 
     }
