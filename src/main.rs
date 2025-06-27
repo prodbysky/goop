@@ -1,4 +1,3 @@
-/// modules disabled temporarely for the ast rewrite
 // mod codegen;
 // mod ir;
 mod config;
@@ -25,8 +24,8 @@ fn main() -> Result<(), ()> {
 
     let program = parse_source(&input, &args.input)?;
     dbg!(program);
-    /*
 
+    /*
     let module = match ir::Module::from_ast(program) {
         Ok(m) => m,
         Err(e) => {

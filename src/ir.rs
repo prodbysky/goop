@@ -9,7 +9,7 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn from_ast(ast_module: parser::AstModule) -> Result<Self, Spanned<Error>> {
+    pub fn from_ast(ast_module: parser::Module) -> Result<Self, Spanned<Error>> {
         let mut s = Self { functions: vec![] };
 
         let mut func_types = HashMap::new();
