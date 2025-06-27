@@ -641,7 +641,10 @@ impl std::fmt::Display for Error {
                 logging::error!(f, "Expected a binary operator here")
             }
             Self::UnclosedParenthesis => {
-                logging::error!(f, "Found unbalanced parenthesis when parsing an enclosed expression")
+                logging::error!(
+                    f,
+                    "Found unbalanced parenthesis when parsing an enclosed expression"
+                )
             }
             Self::UnexpectedToken => {
                 logging::error!(f, "Found an unexpected token when parsing statement")
@@ -653,10 +656,16 @@ impl std::fmt::Display for Error {
                 logging::error!(f, "Expected a semicolon here to terminate a statement")
             }
             Self::ExpectedBlockBegin => {
-                logging::error!(f, "Expected a `{{` here to start a block, for a `if` or `while` statement")
+                logging::error!(
+                    f,
+                    "Expected a `{{` here to start a block, for a `if` or `while` statement"
+                )
             }
             Self::ExpectedBlockEnd => {
-                logging::error!(f, "Expected a `}}` here to end a block, of a `if` or `while` statement")
+                logging::error!(
+                    f,
+                    "Expected a `}}` here to end a block, of a `if` or `while` statement"
+                )
             }
             Self::ExpectedBindingName => {
                 logging::error!(f, "Expected here to be a name for a variable")
@@ -680,7 +689,10 @@ impl std::fmt::Display for Error {
                 logging::error!(f, "Expected a type name to end the function `header`")
             }
             Self::FunctionDefinitionWithinFunction => {
-                logging::error!(f, "Found an attempt to define a function within a function, that is not allowed")
+                logging::error!(
+                    f,
+                    "Found an attempt to define a function within a function, that is not allowed"
+                )
             }
         }
     }

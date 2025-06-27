@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Spanned, parser, logging};
+use crate::{Spanned, logging, parser};
 use colored::Colorize;
 
 #[derive(Debug, Clone)]
@@ -93,7 +93,11 @@ pub struct Function {
 
 impl Function {
     pub fn get_type(&self) -> FunctionType {
-        FunctionType { name: self.name.clone(), ret: self.ret_type.clone(), args: vec![] }
+        FunctionType {
+            name: self.name.clone(),
+            ret: self.ret_type.clone(),
+            args: vec![],
+        }
     }
     fn add_statement(
         &mut self,
@@ -455,23 +459,17 @@ impl std::fmt::Display for Error {
                 logging::help!(f, "Maybe you have misspelled the name?")
             }
             Self::NotBooleanCondition => {
-                logging::error!(f, "You tried to use a non-boolean condition in a `if` or `while` statement")
-            }
-            Self::UndefinedVariableRedefinition => {
-                logging::errorln!(
+                logging::error!(
                     f,
-                    "You tried to redefine an undefined variable",
-                )?;
-                logging::help!(
-                    f,
-                    "Maybe you have misspelled the name?",
+                    "You tried to use a non-boolean condition in a `if` or `while` statement"
                 )
             }
+            Self::UndefinedVariableRedefinition => {
+                logging::errorln!(f, "You tried to redefine an undefined variable",)?;
+                logging::help!(f, "Maybe you have misspelled the name?",)
+            }
             Self::MismatchedArgumentTypes { callee_type, .. } => {
-                logging::errorln!(
-                    f,
-                    "Called a function with mismatched argument types",
-                )?;
+                logging::errorln!(f, "Called a function with mismatched argument types",)?;
                 logging::note!(f, "Callee type: {callee_type}")
             }
             Self::MismatchedArgumentCount { callee_type, .. } => {
@@ -483,13 +481,13 @@ impl std::fmt::Display for Error {
             }
             Self::UnexpectedType { got, expect } => {
                 logging::errorln!(f, "You mismatched some types")?;
-                logging::note!(
-                    f,
-                    "Expected: {expect:?}, got: {got:?}",
-                )
+                logging::note!(f, "Expected: {expect:?}, got: {got:?}",)
             }
             Self::MismatchedReturnType { got, expect } => {
-                logging::errorln!(f, "You tried to return a value that does not match the functions expected return type")?;
+                logging::errorln!(
+                    f,
+                    "You tried to return a value that does not match the functions expected return type"
+                )?;
                 logging::note!(f, "Expected: {expect:?}, got: {got:?}")
             }
             Self::VariableRedefinition => {

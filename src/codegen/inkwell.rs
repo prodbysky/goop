@@ -34,12 +34,15 @@ impl<'a> Codegen<'a> {
             };
             let mut args = vec![];
             for arg in fn_type_ir.args {
-                args.push(match arg {
-                    ir::Type::U64 => u64_type,
-                    ir::Type::Bool => bool_type,
-                    ir::Type::Char => char_type,
-                    ir::Type::Void => todo!("i dont know what to do here"),
-                }.into());
+                args.push(
+                    match arg {
+                        ir::Type::U64 => u64_type,
+                        ir::Type::Bool => bool_type,
+                        ir::Type::Char => char_type,
+                        ir::Type::Void => todo!("i dont know what to do here"),
+                    }
+                    .into(),
+                );
             }
             let fn_type = ret_type.fn_type(&args, false);
             llvm_module.add_function(f.name(), fn_type, Some(inkwell::module::Linkage::External));
@@ -53,21 +56,19 @@ impl<'a> Codegen<'a> {
             let mut locals = vec![];
             for t in f.temps() {
                 match t {
-                   ir::Value::Temp { t, i } => {
-                       match t {
-                           ir::Type::Char => {
-                                locals.push(self.builder.build_alloca(char_type, "temp_char")?);
-                           }
-                           ir::Type::Void => unreachable!(),
-                           ir::Type::Bool => {
-                                locals.push(self.builder.build_alloca(bool_type, "temp_bool")?);
-                           }
-                           ir::Type::U64 => {
-                                locals.push(self.builder.build_alloca(u64_type, "temp_int")?);
-                           }
-                       }
-                   }
-                   _ => todo!()
+                    ir::Value::Temp { t, i } => match t {
+                        ir::Type::Char => {
+                            locals.push(self.builder.build_alloca(char_type, "temp_char")?);
+                        }
+                        ir::Type::Void => unreachable!(),
+                        ir::Type::Bool => {
+                            locals.push(self.builder.build_alloca(bool_type, "temp_bool")?);
+                        }
+                        ir::Type::U64 => {
+                            locals.push(self.builder.build_alloca(u64_type, "temp_int")?);
+                        }
+                    },
+                    _ => todo!(),
                 }
             }
 
@@ -85,31 +86,49 @@ impl<'a> Codegen<'a> {
                 inkwell::builder::BuilderError,
             > {
                 match v {
-                    ir::Value::Const { t: ir::Type::U64, v } => {
-                        Ok(u64_type.const_int(*v, false))
-                    }
-                    ir::Value::Const { t: ir::Type::Char, v } => {
-                        Ok(char_type.const_int(*v, false))
-                    }
-                    ir::Value::Const { t: ir::Type::Bool, v } => {
-                        Ok(bool_type.const_int(*v, false))
-                    }
-                    ir::Value::Const { t: ir::Type::Void, v } => {
+                    ir::Value::Const {
+                        t: ir::Type::U64,
+                        v,
+                    } => Ok(u64_type.const_int(*v, false)),
+                    ir::Value::Const {
+                        t: ir::Type::Char,
+                        v,
+                    } => Ok(char_type.const_int(*v, false)),
+                    ir::Value::Const {
+                        t: ir::Type::Bool,
+                        v,
+                    } => Ok(bool_type.const_int(*v, false)),
+                    ir::Value::Const {
+                        t: ir::Type::Void,
+                        v,
+                    } => {
                         unreachable!()
                     }
-                    ir::Value::Temp{t: ir::Type::U64, i} => Ok(self
+                    ir::Value::Temp {
+                        t: ir::Type::U64,
+                        i,
+                    } => Ok(self
                         .builder
                         .build_load(u64_type, locals[*i], "loaded")?
                         .into_int_value()),
-                    ir::Value::Temp{t: ir::Type::Char, i} => Ok(self
+                    ir::Value::Temp {
+                        t: ir::Type::Char,
+                        i,
+                    } => Ok(self
                         .builder
                         .build_load(char_type, locals[*i], "loaded")?
                         .into_int_value()),
-                    ir::Value::Temp{t: ir::Type::Bool, i} => Ok(self
+                    ir::Value::Temp {
+                        t: ir::Type::Bool,
+                        i,
+                    } => Ok(self
                         .builder
                         .build_load(bool_type, locals[*i], "loaded")?
                         .into_int_value()),
-                    ir::Value::Temp{t: ir::Type::Void, i} => unreachable!()
+                    ir::Value::Temp {
+                        t: ir::Type::Void,
+                        i,
+                    } => unreachable!(),
                 }
             };
 
@@ -246,7 +265,8 @@ impl<'a> Codegen<'a> {
             }
 
             if !has_terminator && current_block.get_terminator().is_none() {
-                self.builder.build_return(Some(&u64_type.const_int(0, false)))?;
+                self.builder
+                    .build_return(Some(&u64_type.const_int(0, false)))?;
             }
         }
         Ok(llvm_module)

@@ -2,9 +2,8 @@ mod codegen;
 mod config;
 mod ir;
 mod lexer;
-mod parser;
 mod logging;
-
+mod parser;
 
 use clap::Parser;
 use colored::Colorize;
