@@ -1,6 +1,7 @@
-mod codegen;
+/// modules disabled temporarely for the ast rewrite
+// mod codegen;
+// mod ir;
 mod config;
-mod ir;
 mod lexer;
 mod logging;
 mod parser;
@@ -23,6 +24,8 @@ fn main() -> Result<(), ()> {
     };
 
     let program = parse_source(&input, &args.input)?;
+    dbg!(program);
+    /*
 
     let module = match ir::Module::from_ast(program) {
         Ok(m) => m,
@@ -42,10 +45,11 @@ fn main() -> Result<(), ()> {
         "Info".green(),
         pre.elapsed()
     );
+    */
     Ok(())
 }
 
-fn parse_source(input: &str, name: &str) -> Result<parser::AstModule, ()> {
+fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
     let pre_parsing = std::time::Instant::now();
     let tokens: Vec<_> = match lexer::Lexer::new(&input.chars().collect::<Vec<_>>()).lex() {
         Ok(ts) => ts,
@@ -56,14 +60,14 @@ fn parse_source(input: &str, name: &str) -> Result<parser::AstModule, ()> {
         }
     };
 
-    let (program, parser_errors) = parser::Parser::new(&tokens).parse();
-    for e in &parser_errors {
-        eprintln!("{}", e.v);
-        display_diagnostic_info(&input, name, e);
-    }
-    if !parser_errors.is_empty() {
-        return Err(());
-    }
+    let program = match parser::Parser::new(&tokens).parse() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{}", e.v);
+            display_diagnostic_info(&input, name, &e);
+            return Err(());
+        }
+    };
     println!(
         "[{}]: Parsing source code took: {:.2?}",
         "Info".green(),
@@ -72,7 +76,7 @@ fn parse_source(input: &str, name: &str) -> Result<parser::AstModule, ()> {
     Ok(program)
 }
 
-fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
+fn display_diagnostic_info<T>(input: &str, input_name: &str, e: &Spanned<T>) {
     let line_offset = e.offset - e.line_beginning;
     let line_end = input[e.line_beginning..].find('\n').unwrap_or(input.len()) + e.line_beginning;
     let line = &input[e.line_beginning..line_end];
