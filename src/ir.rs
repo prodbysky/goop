@@ -9,13 +9,13 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn from_ast(ast_module: parser::Module) -> Result<Self, Spanned<Error>> {
+    pub fn from_ast<'a>(ast_module: parser::Module) -> Result<Self, Spanned<Error>> {
         let mut s = Self { functions: vec![] };
 
         let mut func_types = HashMap::new();
         func_types.insert(
             "getchar".to_string(),
-            FunctionType {
+            parser::FunctionType {
                 name: "getchar".to_string(),
                 ret: Type::Char,
                 args: vec![],
@@ -23,14 +23,16 @@ impl Module {
         );
         func_types.insert(
             "putchar".to_string(),
-            FunctionType {
+            parser::FunctionType {
                 name: "putchar".to_string(),
                 ret: Type::Void,
-                args: vec![Type::Char],
+                args: vec![("c".to_string(), Type::Char)],
             },
         );
+
         for f in ast_module.funcs() {
-            func_types.insert(f.v.name.clone(), f.v.get_type());
+            let t = f.v.get_type();
+            func_types.insert(t.name.to_string(), t);
         }
 
         for f in ast_module.funcs() {
@@ -43,7 +45,7 @@ impl Module {
         Ok(s)
     }
 
-    fn add_function(&mut self, name: String, fn_type: FunctionType) -> &mut Function {
+    fn add_function(&mut self, name: String, fn_type: parser::FunctionType) -> &mut Function {
         self.functions.push(Function {
             name,
             body: vec![],
@@ -65,23 +67,6 @@ impl Module {
 }
 
 #[derive(Debug, Clone)]
-pub struct FunctionType {
-    pub name: String,
-    pub ret: Type,
-    pub args: Vec<Type>,
-}
-
-impl std::fmt::Display for FunctionType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "func {}(", self.name)?;
-        for arg in &self.args {
-            write!(f, "{arg:?},")?;
-        }
-        write!(f, ")")
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct Function {
     ret_type: Type,
     name: String,
@@ -92,8 +77,8 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn get_type(&self) -> FunctionType {
-        FunctionType {
+    pub fn get_type(&self) -> parser::FunctionType {
+        parser::FunctionType {
             name: self.name.clone(),
             ret: self.ret_type.clone(),
             args: vec![],
@@ -102,7 +87,7 @@ impl Function {
     fn add_statement(
         &mut self,
         s: &Spanned<parser::Statement>,
-        funcs: &HashMap<String, FunctionType>,
+        funcs: &HashMap<String, parser::FunctionType>,
     ) -> Result<(), Spanned<Error>> {
         match &s.v {
             parser::Statement::Return(v) => {
@@ -233,7 +218,7 @@ impl Function {
                 }
 
                 for i in 0..args.len() {
-                    if args_into[i].get_type() != &receiver.args[i] {
+                    if args_into[i].get_type() != &receiver.args[i].1 {
                         return Err(Spanned {
                             offset: s.offset,
                             len: s.len,
@@ -259,7 +244,7 @@ impl Function {
     fn add_expr(
         &mut self,
         e: &Spanned<parser::Expression>,
-        funcs: &HashMap<String, FunctionType>,
+        funcs: &HashMap<String, parser::FunctionType>,
     ) -> Result<Value, Spanned<Error>> {
         match &e.v {
             parser::Expression::Integer(i) => Ok(Value::Const {
@@ -368,7 +353,7 @@ impl Function {
                     send_load.push(self.add_expr(&arg, funcs)?);
                 }
                 for i in 0..args.len() {
-                    if send_load[i].get_type() != &receiver.args[i] {
+                    if send_load[i].get_type() != &receiver.args[i].1 {
                         return Err(Spanned {
                             offset: e.offset,
                             len: e.len,
@@ -435,12 +420,12 @@ pub enum Error {
     NotBooleanCondition,
     UndefinedFunction,
     MismatchedArgumentCount {
-        callee_type: FunctionType,
+        callee_type: parser::FunctionType,
         expect: usize,
         got: usize,
     },
     MismatchedArgumentTypes {
-        callee_type: FunctionType,
+        callee_type: parser::FunctionType,
         expect: usize,
         got: usize,
     },

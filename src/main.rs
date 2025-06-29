@@ -1,5 +1,5 @@
-// mod codegen;
-// mod ir;
+mod codegen;
+mod ir;
 mod config;
 mod lexer;
 mod logging;
@@ -23,9 +23,7 @@ fn main() -> Result<(), ()> {
     };
 
     let program = parse_source(&input, &args.input)?;
-    dbg!(program);
 
-    /*
     let module = match ir::Module::from_ast(program) {
         Ok(m) => m,
         Err(e) => {
@@ -34,6 +32,7 @@ fn main() -> Result<(), ()> {
             return Err(());
         }
     };
+    dbg!(&module);
 
     let no_ext = &args.input[..args.input.len() - 3];
 
@@ -44,7 +43,6 @@ fn main() -> Result<(), ()> {
         "Info".green(),
         pre.elapsed()
     );
-    */
     Ok(())
 }
 

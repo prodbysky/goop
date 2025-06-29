@@ -1,5 +1,5 @@
 use crate::lexer::{Keyword, Operator, Token};
-use crate::logging;
+use crate::{ir, logging};
 use crate::Spanned;
 use colored::Colorize;
 
@@ -580,9 +580,40 @@ impl Module {
 
 #[derive(Debug)]
 pub struct Function {
-    name: String,
+    pub name: String,
     body: Vec<Spanned<Statement>>,
     ret_type: String,
+}
+
+impl Function {
+    pub fn get_type(&self) -> FunctionType {
+        let name = &self.name;
+        let args = vec![];
+        let ret = ir::type_from_type_name(&self.ret_type);
+        FunctionType { name: name.to_string(), args, ret }
+    }
+    pub fn body(&self) -> &[Spanned<Statement>] {
+        &self.body
+    }
+}
+
+
+/// Type used in the IR generation
+#[derive(Debug, Clone)]
+pub struct FunctionType {
+    pub name: String,
+    pub args: Vec<(String, ir::Type)>,
+    pub ret: ir::Type
+}
+
+impl std::fmt::Display for FunctionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "func {}(", self.name)?;
+        for arg in &self.args {
+            write!(f, "{arg:?},")?;
+        }
+        write!(f, ")")
+    }
 }
 
 #[derive(Debug)]
