@@ -35,7 +35,7 @@ impl<'a> Codegen<'a> {
             let mut args = vec![];
             for arg in fn_type_ir.args {
                 args.push(
-                    match arg {
+                    match arg.1 {
                         ir::Type::U64 => u64_type,
                         ir::Type::Bool => bool_type,
                         ir::Type::Char => char_type,
@@ -56,7 +56,7 @@ impl<'a> Codegen<'a> {
             let mut locals = vec![];
             for t in f.temps() {
                 match t {
-                    ir::Value::Temp { t, i } => match t {
+                    ir::Value::Temp { t, i: _ } => match t {
                         ir::Type::Char => {
                             locals.push(self.builder.build_alloca(char_type, "temp_char")?);
                         }
@@ -100,7 +100,7 @@ impl<'a> Codegen<'a> {
                     } => Ok(bool_type.const_int(*v, false)),
                     ir::Value::Const {
                         t: ir::Type::Void,
-                        v,
+                        v: _,
                     } => {
                         unreachable!()
                     }
@@ -127,7 +127,7 @@ impl<'a> Codegen<'a> {
                         .into_int_value()),
                     ir::Value::Temp {
                         t: ir::Type::Void,
-                        i,
+                        i: _,
                     } => unreachable!(),
                 }
             };
@@ -292,7 +292,6 @@ pub fn generate_code(module: ir::Module, no_ext: &str, out_name: &str) {
     let mut cg = Codegen::new(&ctx);
 
     let module = cg.gen_module(module).unwrap();
-    // module.print_to_stderr();
 
     let assembly_name = format!("{no_ext}.s");
     module.verify().unwrap();

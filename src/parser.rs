@@ -1,360 +1,277 @@
-use crate::{Spanned, lexer, logging};
+use crate::lexer::{Keyword, Operator, Token};
+use crate::{ir, logging};
+use crate::Spanned;
 use colored::Colorize;
 
-#[derive(Debug)]
-pub struct Parser<'a> {
-    tokens: &'a [Spanned<lexer::Token>],
-    prev_token: &'a Spanned<lexer::Token>,
-}
-
-#[derive(Debug, Default)]
-pub struct AstModule {
-    funcs: Vec<Spanned<Function>>,
-}
-
-impl AstModule {
-    pub fn funcs(&self) -> &[Spanned<Function>] {
-        &self.funcs
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct Function {
-    pub name: String,
-    ret_type: String,
-    body: Vec<Spanned<Statement>>,
-}
-
-impl Function {
-    pub fn get_type(&self) -> crate::ir::FunctionType {
-        crate::ir::FunctionType {
-            name: self.name.clone(),
-            ret: crate::ir::type_from_type_name(&self.ret_type),
-            args: vec![],
-        }
-    }
-    pub fn body(&self) -> &[Spanned<Statement>] {
-        &self.body
-    }
-}
-
 impl<'a> Parser<'a> {
-    pub fn new(tokens: &'a Vec<Spanned<lexer::Token>>) -> Self {
+    pub fn new(tokens: &'a [Spanned<Token>]) -> Self {
         Self {
             tokens,
             prev_token: &tokens[0],
         }
     }
-    fn finished(&mut self) -> bool {
-        self.tokens.is_empty()
-    }
 
-    pub fn parse(mut self) -> (AstModule, Vec<Spanned<Error>>) {
-        let mut errs = vec![];
-        let mut module = AstModule::default();
+    pub fn parse(mut self) -> Result<Module, Spanned<Error>> {
+        let mut module = Module::new();
 
         while !self.finished() {
-            match self.parse_function() {
-                Ok(s) => module.funcs.push(s),
-                Err(e) => errs.push(e),
-            }
+            module.functions.push(self.parse_function()?);
         }
 
-        (module, errs)
-    }
-
-    fn error_from_last_tk(&self, e: Error) -> Spanned<Error> {
-        Spanned {
-            offset: self.prev_token.offset,
-            len: self.prev_token.len,
-            line_beginning: self.prev_token.line_beginning,
-            v: e,
-        }
+        Ok(module)
     }
 
     fn parse_function(&mut self) -> Result<Spanned<Function>, Spanned<Error>> {
-        let begin = self.expect(
-            &lexer::Token::Keyword(lexer::Keyword::Func),
-            Error::UnexpectedToken,
-        )?;
-        let ident = self.expect_ident(Error::ExpectedFunctionName)?;
-        self.expect(
-            &lexer::Token::OpenParen,
-            Error::ExpectedFunctionArgListBegin,
-        )?;
-        self.expect(&lexer::Token::CloseParen, Error::ExpectedFunctionArgListEnd)?;
-        let ret_type = self.expect_ident(Error::ExpectedFunctionReturnType)?;
-        self.expect(&lexer::Token::OpenCurly, Error::ExpectedBlockBegin)?;
-
-        let mut body = vec![];
-        while self
-            .current()
-            .is_some_and(|t| t.v != lexer::Token::CloseCurly)
-        {
-            body.push(self.parse_statement()?);
-        }
-
-        let last = self.expect(&lexer::Token::CloseCurly, Error::ExpectedBlockEnd)?;
+        let begin = self.expect_keyword(Keyword::Func)?;
+        let identifier = self.expect_name()?;
+        self.expect_token(Token::OpenParen)?;
+        self.expect_token(Token::CloseParen)?;
+        let return_type = self.expect_name()?;
+        let (body, end) = self.parse_block()?;
         Ok(Spanned {
             offset: begin.offset,
-            len: last.offset - begin.offset,
+            len: end.offset - begin.offset,
             line_beginning: begin.line_beginning,
             v: Function {
-                name: ident.v,
+                name: identifier.v,
                 body,
-                ret_type: ret_type.v,
+                ret_type: return_type.v,
             },
         })
     }
 
-    fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
-        match self.current().cloned() {
-            Some(Spanned {
-                offset,
-                len: _,
-                line_beginning,
-                v: lexer::Token::Keyword(k),
-            }) => match k {
-                lexer::Keyword::Return => {
-                    self.eat();
-                    let expr = self.parse_expression()?;
-                    let semicolon =
-                        self.expect_semicolon(Error::ExpectedSemicolonAfterStatement)?;
-                    Ok(Spanned {
-                        offset,
-                        len: semicolon.offset - offset,
-                        line_beginning,
-                        v: Statement::Return(expr),
-                    })
-                }
-                lexer::Keyword::Let => {
-                    let l = self.eat().unwrap();
-                    let ident = match self.current().cloned() {
-                        Some(Spanned {
-                            v: lexer::Token::Identifier(ident),
-                            ..
-                        }) => ident,
-                        Some(Spanned { .. }) | None => {
-                            return Err(self.error_from_last_tk(Error::ExpectedIdentifier));
-                        }
-                    };
-                    self.expect_ident(Error::ExpectedBindingName)?;
-                    self.expect(
-                        &lexer::Token::Colon,
-                        Error::ExpectedColonAfterLetBindingName,
-                    )?;
-                    let type_name = self.expect_ident(Error::ExpectedTypeName)?;
-                    self.expect(&lexer::Token::Assign, Error::UnexpectedToken)?;
-                    let expr = self.parse_expression()?;
-                    let semicolon =
-                        self.expect_semicolon(Error::ExpectedSemicolonAfterStatement)?;
-                    Ok(Spanned {
-                        offset: l.offset,
-                        len: semicolon.offset - l.offset,
-                        line_beginning: l.line_beginning,
-                        v: Statement::VarAssign {
-                            name: ident.to_string(),
-                            t: type_name.v,
-                            expr,
-                        },
-                    })
-                }
-                lexer::Keyword::If => {
-                    let begin = self.eat().unwrap();
-                    let expr = self.parse_expression()?;
-                    self.expect(&lexer::Token::OpenCurly, Error::ExpectedBlockBegin)?;
-                    let mut body = vec![];
-                    while self
-                        .current()
-                        .is_some_and(|t| t.v != lexer::Token::CloseCurly)
-                    {
-                        body.push(self.parse_statement()?);
-                    }
-                    let end = self.expect(&lexer::Token::CloseCurly, Error::ExpectedBlockEnd)?;
-                    Ok(Spanned {
-                        offset: begin.offset,
-                        len: end.offset - begin.offset,
-                        line_beginning: begin.line_beginning,
-                        v: Statement::If { cond: expr, body },
-                    })
-                }
-                lexer::Keyword::While => {
-                    let begin = self.eat().unwrap();
-                    let expr = self.parse_expression()?;
-                    self.expect(&lexer::Token::OpenCurly, Error::ExpectedBlockBegin)?;
-                    let mut body = vec![];
-                    while self
-                        .current()
-                        .is_some_and(|t| t.v != lexer::Token::CloseCurly)
-                    {
-                        body.push(self.parse_statement()?);
-                    }
-                    let end = self.expect(&lexer::Token::CloseCurly, Error::ExpectedBlockEnd)?;
-                    Ok(Spanned {
-                        offset: begin.offset,
-                        len: end.offset - begin.offset,
-                        line_beginning: begin.line_beginning,
-                        v: Statement::While { cond: expr, body },
-                    })
-                }
-                lexer::Keyword::Func => {
-                    Err(self.error_from_last_tk(Error::FunctionDefinitionWithinFunction))
-                }
-                lexer::Keyword::True | lexer::Keyword::False => unreachable!(),
-            },
-            Some(Spanned {
-                offset,
-                len: _,
-                line_beginning,
-                v: lexer::Token::Identifier(name),
-            }) => {
-                self.eat().unwrap();
-                match self.current().unwrap().v {
-                    lexer::Token::Assign => {
-                        self.eat().unwrap();
-                        let value = self.parse_expression()?;
-                        let semicolon =
-                            self.expect_semicolon(Error::ExpectedSemicolonAfterStatement)?;
-                        Ok(Spanned {
-                            offset,
-                            len: semicolon.offset - offset,
-                            line_beginning,
-                            v: Statement::VarReassign { name, expr: value },
-                        })
-                    }
-                    lexer::Token::OpenParen => {
-                        let begin = self.eat().unwrap();
-                        let mut args = vec![];
-                        while self
-                            .current()
-                            .is_some_and(|t| t.v != lexer::Token::CloseParen)
-                        {
-                            let expr = self.parse_expression()?;
-                            args.push(expr);
-                            match self.current() {
-                                None => return Err(self.error_from_last_tk(Error::UnexpectedToken)),
-                                Some(Spanned {
-                                    v: lexer::Token::Comma,
-                                    ..
-                                }) => self.eat(),
-                                Some(Spanned {
-                                    v: lexer::Token::CloseParen,
-                                    ..
-                                }) => {
-                                    break;
-                                }
-                                Some(Spanned { .. }) => {
-                                    return Err(self.error_from_last_tk(Error::UnexpectedToken));
-                                }
-                            };
-                        }
-                        self.expect(&lexer::Token::CloseParen, Error::UnclosedParenthesis)?;
-                        let semicolon =
-                            self.expect_semicolon(Error::ExpectedSemicolonAfterStatement)?;
-                        Ok(Spanned {
-                            offset: begin.offset,
-                            len: semicolon.offset - begin.offset,
-                            line_beginning: begin.line_beginning,
-                            v: Statement::FuncCall { name, args },
-                        })
-                    }
-                    _ => Err(self.error_from_last_tk(Error::UnexpectedToken)),
-                }
-            }
+    fn parse_block(&mut self) -> Result<(Vec<Spanned<Statement>>, Spanned<()>), Spanned<Error>> {
+        self.expect_token(Token::OpenCurly)?;
+        let mut body = vec![];
 
-            None => unreachable!(),
+        while self.peek().is_some_and(|t| &t.v != &Token::CloseCurly) {
+            body.push(self.parse_statement()?);
+        }
+        let end = self.expect_token(Token::CloseCurly)?;
+        let end_span = Spanned {
+            v: (),
+            offset: end.offset,
+            line_beginning: end.line_beginning,
+            len: end.len,
+        };
+        Ok((body, end_span))
+    }
+
+    fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        match self.peek() {
             Some(Spanned {
+                v: Token::Keyword(Keyword::Return),
+                ..
+            }) => self.parse_return(),
+            Some(Spanned {
+                v: Token::Keyword(Keyword::If),
+                ..
+            }) => self.parse_if(),
+            Some(Spanned {
+                v: Token::Keyword(Keyword::While),
+                ..
+            }) => self.parse_while(),
+            Some(Spanned {
+                v: Token::Keyword(Keyword::Let),
+                ..
+            }) => self.parse_let(),
+            Some(Spanned {
+                v: Token::Keyword(Keyword::Func),
+                ..
+            }) => Err(self.spanned_error_from_last_tk(Error::NestedFunctionDefinition)),
+            Some(Spanned {
+                v: Token::Keyword(Keyword::True | Keyword::False),
+                ..
+            }) => Err(self.spanned_error_from_last_tk(Error::BooleanExpressionAsStatement)),
+            Some(Spanned {
+                v: Token::Identifier(name),
                 offset,
                 len,
                 line_beginning,
-                v: _,
             }) => {
-                let e = Err(Spanned {
-                    offset,
-                    len,
-                    line_beginning,
-                    v: Error::UnexpectedToken,
-                });
-                self.eat();
-                e
-            }
-        }
-    }
-
-    fn expect(
-        &mut self,
-        t: &lexer::Token,
-        e: Error,
-    ) -> Result<Spanned<lexer::Token>, Spanned<Error>> {
-        match self.eat() {
-            Some(x) => {
-                if std::mem::discriminant(&x.v) == std::mem::discriminant(t) {
-                    Ok(x)
-                } else {
-                    Err(self.error_from_last_tk(e))
+                self.next().unwrap();
+                match self.peek() {
+                    Some(Spanned {
+                        v: Token::Assign, ..
+                    }) => {
+                        self.next();
+                        self.parse_assign(&Spanned {
+                            offset,
+                            len,
+                            line_beginning,
+                            v: name,
+                        })
+                    }
+                    Some(Spanned {
+                        v: Token::OpenParen,
+                        ..
+                    }) => {
+                        self.next();
+                        self.parse_call(&Spanned {
+                            offset,
+                            len,
+                            line_beginning,
+                            v: name,
+                        })
+                    }
+                    None => Err(self.spanned_error_from_last_tk(
+                        Error::UnexpectedTokenAfterIdentifierInStatement { got: None },
+                    )),
+                    Some(Spanned { v, .. }) => Err(self.spanned_error_from_last_tk(
+                        Error::UnexpectedTokenAfterIdentifierInStatement { got: Some(v) },
+                    )),
                 }
             }
-            None => Err(self.error_from_last_tk(e)),
+            None => Err(self.spanned_error_from_last_tk(Error::ExpectedStartOfStatement)),
+            Some(_) => Err(self.spanned_error_from_last_tk(Error::ExpectedStartOfStatement)),
         }
     }
 
-    fn expect_semicolon(&mut self, e: Error) -> Result<Spanned<lexer::Token>, Spanned<Error>> {
-        self.expect(&lexer::Token::Semicolon, e)
+    /// return Optional[Expression];
+    /// NOTE: For now we assume that the return value is not void
+    fn parse_return(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let begin = self.next().unwrap();
+        let expr = self.parse_expression()?;
+        let end = self.expect_semicolon()?;
+        Ok(Spanned {
+            offset: begin.offset,
+            len: end.offset - begin.offset,
+            line_beginning: begin.line_beginning,
+            v: Statement::Return (expr),
+        })
     }
 
-    fn expect_ident(&mut self, e: Error) -> Result<Spanned<String>, Spanned<Error>> {
-        match self.expect(&lexer::Token::Identifier("".to_string()), e) {
-            Ok(t) => match t.v {
-                lexer::Token::Identifier(name) => Ok(Spanned {
-                    offset: t.offset,
-                    len: t.len,
-                    line_beginning: t.line_beginning,
-                    v: name,
-                }),
-                _ => unreachable!(),
+    /// if [expr] { ... }
+    /// NOTE: The `expr` has to be a boolean
+    fn parse_if(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let begin = self.next().unwrap();
+        let cond = self.parse_expression()?;
+        let (body, end) = self.parse_block()?;
+        Ok(Spanned {
+            offset: begin.offset,
+            len: end.offset - begin.offset,
+            line_beginning: begin.line_beginning,
+            v: Statement::If { cond, body },
+        })
+    }
+
+    /// while [expr] { ... }
+    /// NOTE: The `expr` has to be a boolean
+    fn parse_while(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let begin = self.next().unwrap();
+        let cond = self.parse_expression()?;
+        let (body, end) = self.parse_block()?;
+        Ok(Spanned {
+            offset: begin.offset,
+            len: end.offset - begin.offset,
+            line_beginning: begin.line_beginning,
+            v: Statement::While { cond, body },
+        })
+    }
+
+    /// let [name]: [type_name] = [expr];
+    /// NOTE: The `expr` has to be a boolean
+    fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let begin = self.next().unwrap();
+        let name = self.expect_name()?.v;
+        self.expect_token(Token::Colon)?;
+        let type_name = self.expect_name()?.v;
+        self.expect_token(Token::Assign)?;
+        let value = self.parse_expression()?;
+        let end = self.expect_semicolon()?;
+        Ok(Spanned {
+            offset: begin.offset,
+            len: end.offset - begin.offset,
+            line_beginning: begin.line_beginning,
+            v: Statement::VarAssign {
+                name,
+                t: type_name,
+                expr: value,
             },
-            Err(e) => Err(e),
-        }
+        })
     }
 
-    // https://craftinginterpreters.com/parsing-expressions.html
+    /// [name] = [expr];
+    /// NOTE: `expr` has to be the same type as the previous value of the variable
+    fn parse_assign(
+        &mut self,
+        begin_token: &Spanned<String>,
+    ) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let name = begin_token.v.clone();
+        self.expect_token(Token::Assign)?;
+        let value = self.parse_expression()?;
+        let end = self.expect_semicolon()?;
+        Ok(Spanned {
+            offset: begin_token.offset,
+            len: end.offset - begin_token.offset,
+            line_beginning: begin_token.line_beginning,
+            v: Statement::VarReassign { name, expr: value },
+        })
+    }
+
+    /// [func_name]([name]*);
+    fn parse_call(
+        &mut self,
+        begin_token: &Spanned<String>,
+    ) -> Result<Spanned<Statement>, Spanned<Error>> {
+        let name = begin_token.v.clone();
+        let mut args = vec![];
+        while self
+            .peek()
+            .is_some_and(|t| t.v != Token::CloseParen)
+        {
+            let expr = self.parse_expression()?;
+            args.push(expr);
+            match self.peek() {
+                None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
+                Some(Spanned {
+                    v: Token::Comma,
+                    ..
+                }) => self.next(),
+                Some(Spanned {
+                    v: Token::CloseParen,
+                    ..
+                }) => {
+                    break;
+                }
+                Some(Spanned { .. }) => {
+                    return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken));
+                }
+            };
+        }
+        self.expect_token(Token::CloseParen)?;
+        let semicolon = self.expect_semicolon()?;
+        Ok(Spanned {
+            offset: begin_token.offset,
+            len: semicolon.offset - begin_token.offset,
+            line_beginning: begin_token.line_beginning,
+            v: Statement::FuncCall { name, args },
+        })
+    }
     fn parse_expression(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        self.parse_comparison()
+        self.parse_cmp()
     }
 
-    // hell yeah
-    fn parse_comparison(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        self.parse_expr_help(
-            |t| {
-                matches!(
-                    t.v,
-                    lexer::Token::Operator(lexer::Operator::Less | lexer::Operator::More)
-                )
-            },
+    fn parse_cmp(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
+        self.parse_base_binary_expression(
+            |t| matches!(t.v, Token::Operator(Operator::Less | Operator::More)),
             Parser::parse_term,
         )
     }
 
     fn parse_term(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        self.parse_expr_help(
-            |t| {
-                matches!(
-                    t.v,
-                    lexer::Token::Operator(lexer::Operator::Plus | lexer::Operator::Minus)
-                )
-            },
+        self.parse_base_binary_expression(
+            |t| matches!(t.v, Token::Operator(Operator::Plus | Operator::Minus)),
             Parser::parse_factor,
         )
     }
 
     fn parse_factor(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        self.parse_expr_help(
+        self.parse_base_binary_expression(
             |t| {
                 matches!(
                     t.v,
-                    lexer::Token::Operator(
-                        lexer::Operator::Slash | lexer::Operator::Star | lexer::Operator::Percent
-                    )
+                    Token::Operator(Operator::Slash | Operator::Star | Operator::Percent)
                 )
             },
             Parser::parse_unary,
@@ -362,27 +279,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        if matches!(
-            self.current(),
-            Some(Spanned {
-                v: lexer::Token::Operator(lexer::Operator::Not | lexer::Operator::Minus),
-                ..
-            })
-        ) {
-            let (offset, _len, line_beginning, op) = match self.eat().unwrap() {
-                Spanned {
-                    offset,
-                    len,
-                    line_beginning,
-                    v: lexer::Token::Operator(a @ (lexer::Operator::Not | lexer::Operator::Minus)),
-                } => (offset, len, line_beginning, a),
-                _ => unreachable!(),
-            };
+        if let Some(Spanned {
+            v: Token::Operator(op @ (Operator::Not | Operator::Minus)),
+            offset,
+            line_beginning,
+            len: _,
+        }) = self.peek()
+        {
             let right = self.parse_unary()?;
             return Ok(Spanned {
                 offset,
                 len: right.offset - offset,
-                line_beginning,
+                line_beginning: line_beginning,
                 v: Expression::Unary {
                     op,
                     right: Box::new(right),
@@ -393,144 +301,120 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
-        match self.current().cloned() {
-            None => Err(self.error_from_last_tk(Error::ExpectedPrimaryExpresion)),
+        match self.next() {
             Some(Spanned {
                 offset,
                 len,
                 line_beginning,
-                v: lexer::Token::Integer(n),
-            }) => {
-                let r = Ok(Spanned {
+                v: Token::Integer(n),
+            }) => Ok(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Expression::Integer(n),
+            }),
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Token::Char(n),
+            }) => Ok(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Expression::Char(n),
+            }),
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Token::Keyword(Keyword::True),
+            }) => Ok(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Expression::Bool(true),
+            }),
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Token::Keyword(Keyword::False),
+            }) => Ok(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Expression::Bool(false),
+            }),
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Token::Identifier(ident),
+            }) => match self.peek() {
+                Some(Spanned {
                     offset,
-                    len,
+                    len: _,
                     line_beginning,
-                    v: Expression::Integer(n),
-                });
-                self.eat();
-                r
-            }
-            Some(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v: lexer::Token::Char(n),
-            }) => {
-                let r = Ok(Spanned {
-                    offset,
-                    len,
-                    line_beginning,
-                    v: Expression::Char(n),
-                });
-                self.eat();
-                r
-            }
-            Some(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v: lexer::Token::Keyword(lexer::Keyword::True),
-            }) => {
-                let r = Ok(Spanned {
-                    offset,
-                    len,
-                    line_beginning,
-                    v: Expression::Bool(true),
-                });
-                self.eat();
-                r
-            }
-            Some(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v: lexer::Token::Keyword(lexer::Keyword::False),
-            }) => {
-                let r = Ok(Spanned {
-                    offset,
-                    len,
-                    line_beginning,
-                    v: Expression::Bool(false),
-                });
-                self.eat();
-                r
-            }
-            Some(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v: lexer::Token::Identifier(ident),
-            }) => {
-                self.eat().unwrap();
-                match self.current().cloned() {
-                    Some(Spanned {
-                        offset,
-                        len: _,
-                        line_beginning,
-                        v: lexer::Token::OpenParen,
-                    }) => {
-                        self.eat().unwrap();
-                        let mut args = vec![];
-                        while self
-                            .current()
-                            .is_some_and(|t| t.v != lexer::Token::CloseParen)
-                        {
-                            let expr = self.parse_expression()?;
-                            args.push(expr);
-                            match self.current() {
-                                None => return Err(self.error_from_last_tk(Error::UnexpectedToken)),
-                                Some(Spanned {
-                                    v: lexer::Token::Comma,
-                                    ..
-                                }) => self.eat(),
-                                Some(Spanned {
-                                    v: lexer::Token::CloseParen,
-                                    ..
-                                }) => {
-                                    break;
-                                }
-                                Some(Spanned { .. }) => {
-                                    return Err(self.error_from_last_tk(Error::UnexpectedToken));
-                                }
-                            };
-                        }
-                        let end =
-                            self.expect(&lexer::Token::CloseParen, Error::UnclosedParenthesis)?;
-                        Ok(Spanned {
-                            offset,
-                            len: end.offset - offset,
-                            line_beginning,
-                            v: Expression::FuncCall {
-                                name: ident.to_string(),
-                                args,
-                            },
-                        })
+                    v: Token::OpenParen,
+                }) => {
+                    self.next();
+                    let mut args = vec![];
+                    while self.peek().is_some_and(|t| t.v != Token::CloseParen) {
+                        let expr = self.parse_expression()?;
+                        args.push(expr);
+                        match self.peek() {
+                            None => {
+                                return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken));
+                            }
+                            Some(Spanned {
+                                v: Token::Comma, ..
+                            }) => self.next(),
+                            Some(Spanned {
+                                v: Token::CloseParen,
+                                ..
+                            }) => {
+                                break;
+                            }
+                            Some(Spanned { .. }) => {
+                                return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken));
+                            }
+                        };
                     }
-                    None | Some(_) => Ok(Spanned {
+                    let end = self.expect_token(Token::CloseParen)?;
+                    Ok(Spanned {
                         offset,
-                        len,
+                        len: end.offset - offset,
                         line_beginning,
-                        v: Expression::Identifier(ident.to_string()),
-                    }),
+                        v: Expression::FuncCall {
+                            name: ident.to_string(),
+                            args,
+                        },
+                    })
                 }
-            }
+                None | Some(_) => Ok(Spanned {
+                    offset,
+                    len,
+                    line_beginning,
+                    v: Expression::Identifier(ident.to_string()),
+                }),
+            },
             Some(Spanned {
-                v: lexer::Token::OpenParen,
+                v: Token::OpenParen,
                 ..
             }) => {
-                self.eat();
-
+                self.next();
                 let expr = self.parse_expression()?;
 
-                match self.current() {
+                match self.peek() {
                     None => {
-                        return Err(self.error_from_last_tk(Error::UnclosedParenthesis));
+                        return Err(self.spanned_error_from_last_tk(Error::UnbalancedParenthesis));
                     }
                     Some(Spanned {
-                        v: lexer::Token::CloseParen,
+                        v: Token::CloseParen,
                         ..
                     }) => {
-                        self.eat();
+                        self.next();
                     }
                     Some(Spanned {
                         offset,
@@ -539,189 +423,210 @@ impl<'a> Parser<'a> {
                         v: _,
                     }) => {
                         return Err(Spanned {
-                            offset: *offset,
-                            len: *len,
-                            line_beginning: *line_beginning,
-                            v: Error::UnclosedParenthesis,
+                            offset,
+                            len,
+                            line_beginning,
+                            v: Error::UnbalancedParenthesis,
                         });
                     }
                 };
 
                 Ok(expr)
             }
-            Some(t) => Err(Spanned {
-                offset: t.offset,
-                len: t.len,
-                line_beginning: t.line_beginning,
-                v: Error::UnexpectedTokenInExpression,
-            }),
+            None => Err(self.spanned_error_from_last_tk(Error::ExpectedExpression)),
+            Some(_) => Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
         }
     }
 
-    fn parse_expr_help(
+    // https://craftinginterpreters.com/parsing-expressions.html
+    fn parse_base_binary_expression(
         &mut self,
-        cond: fn(&Spanned<lexer::Token>) -> bool,
-        lower_element: fn(&mut Parser<'a>) -> Result<Spanned<Expression>, Spanned<Error>>,
+        predicate: fn(Spanned<Token>) -> bool,
+        lower_precedence_parser: fn(&mut Parser<'a>) -> Result<Spanned<Expression>, Spanned<Error>>,
     ) -> Result<Spanned<Expression>, Spanned<Error>> {
-        let mut left = lower_element(self)?;
+        let mut l = lower_precedence_parser(self)?;
 
-        while self.current().is_some_and(cond) {
-            let op = match self.current() {
-                None => return Err(self.error_from_last_tk(Error::ExpectedBinaryOperator)),
+        while self.peek().is_some_and(predicate) {
+            let op = match self.peek() {
+                None => return Err(self.spanned_error_from_last_tk(Error::ExpectedBinaryOperator)),
                 Some(Spanned {
-                    v: lexer::Token::Operator(op),
+                    v: Token::Operator(op),
                     ..
-                }) => *op,
+                }) => op,
                 _ => unreachable!(),
             };
-            self.eat();
-            let right = lower_element(self)?;
+            self.next();
+            let right = lower_precedence_parser(self)?;
 
-            left = Spanned {
-                offset: left.offset,
-                len: right.offset - left.offset,
-                line_beginning: left.line_beginning,
+            l = Spanned {
+                offset: l.offset,
+                len: right.offset - l.offset,
+                line_beginning: l.line_beginning,
                 v: Expression::Binary {
-                    left: Box::new(left),
+                    left: Box::new(l),
                     op,
                     right: Box::new(right),
                 },
             };
         }
 
-        Ok(left)
+        Ok(l)
     }
 
-    fn current(&self) -> Option<&Spanned<lexer::Token>> {
-        self.tokens.first()
-    }
-    fn eat(&mut self) -> Option<Spanned<lexer::Token>> {
-        match self.tokens.split_at_checked(1) {
-            None => None,
-            Some((l, r)) => {
-                self.tokens = r;
-                self.prev_token = &l[0];
-                Some(l[0].clone())
+    fn expect_token(&mut self, t: Token) -> Result<Spanned<Token>, Spanned<Error>> {
+        match self.peek() {
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v,
+            }) if v == t => {
+                self.next();
+                Ok(Spanned {
+                    offset,
+                    len,
+                    line_beginning,
+                    v,
+                })
             }
+            None => Err(self.spanned_error_from_last_tk(Error::ExpectedToken {
+                expected: t,
+                got: None,
+            })),
+            Some(Spanned { v, .. }) => Err(self.spanned_error_from_last_tk(Error::ExpectedToken {
+                expected: t,
+                got: Some(v.clone()),
+            })),
         }
     }
+
+    fn expect_keyword(&mut self, k: Keyword) -> Result<Spanned<Token>, Spanned<Error>> {
+        self.expect_token(Token::Keyword(k))
+    }
+
+    fn expect_name(&mut self) -> Result<Spanned<String>, Spanned<Error>> {
+        match self.peek() {
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Token::Identifier(i),
+            }) => {
+                self.next();
+                Ok(Spanned {
+                    offset,
+                    len,
+                    line_beginning,
+                    v: i.to_string(),
+                })
+            }
+            None => Err(self.spanned_error_from_last_tk(Error::ExpectedToken {
+                expected: Token::Identifier("name".to_string()),
+                got: None,
+            })),
+            Some(Spanned { v, .. }) => Err(self.spanned_error_from_last_tk(Error::ExpectedToken {
+                expected: Token::Identifier("name".to_string()),
+                got: Some(v.clone()),
+            })),
+        }
+    }
+
+    fn expect_semicolon(&mut self) -> Result<Spanned<Token>, Spanned<Error>> {
+        self.expect_token(Token::Semicolon)
+    }
+
+    fn finished(&self) -> bool {
+        self.tokens.is_empty()
+    }
+
+    fn spanned_error_from_last_tk(&self, e: Error) -> Spanned<Error> {
+        Spanned {
+            offset: self.prev_token.offset,
+            len: self.prev_token.len,
+            line_beginning: self.prev_token.line_beginning,
+            v: e,
+        }
+    }
+
+    fn peek(&self) -> Option<Spanned<Token>> {
+        self.tokens.first().cloned()
+    }
+
+    fn next(&mut self) -> Option<Spanned<Token>> {
+        let tk = self.tokens.first().cloned();
+        self.tokens = &self.tokens[1..];
+        tk
+    }
 }
 
+pub struct Parser<'a> {
+    tokens: &'a [Spanned<Token>],
+    prev_token: &'a Spanned<Token>,
+}
+
+#[derive(Debug)]
+pub struct Module {
+    functions: Vec<Spanned<Function>>,
+}
+
+impl Module {
+    pub fn new() -> Self {
+        Self { functions: vec![] }
+    }
+    pub fn funcs(&self) -> &[Spanned<Function>] {
+        &self.functions
+    }
+}
+
+#[derive(Debug)]
+pub struct Function {
+    pub name: String,
+    body: Vec<Spanned<Statement>>,
+    ret_type: String,
+}
+
+impl Function {
+    pub fn get_type(&self) -> FunctionType {
+        let name = &self.name;
+        let args = vec![];
+        let ret = ir::type_from_type_name(&self.ret_type);
+        FunctionType { name: name.to_string(), args, ret }
+    }
+    pub fn body(&self) -> &[Spanned<Statement>] {
+        &self.body
+    }
+}
+
+
+/// Type used in the IR generation
 #[derive(Debug, Clone)]
-pub enum Error {
-    ExpectedPrimaryExpresion,
-    UnexpectedTokenInExpression,
-    ExpectedSemicolonAfterStatement,
-    ExpectedBinaryOperator,
-    UnclosedParenthesis,
-    UnexpectedToken,
-    ExpectedIdentifier,
-    ExpectedBindingName,
-    ExpectedTypeName,
-    ExpectedColonAfterLetBindingName,
-    ExpectedBlockBegin,
-    ExpectedBlockEnd,
-    ExpectedFunctionName,
-    ExpectedFunctionArgListBegin,
-    ExpectedFunctionArgListEnd,
-    ExpectedFunctionReturnType,
-    FunctionDefinitionWithinFunction,
+pub struct FunctionType {
+    pub name: String,
+    pub args: Vec<(String, ir::Type)>,
+    pub ret: ir::Type
 }
 
-impl std::fmt::Display for Error {
+impl std::fmt::Display for FunctionType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ExpectedPrimaryExpresion => {
-                logging::error!(f, "Expected a primary expression here")
-            }
-            Self::UnexpectedTokenInExpression => {
-                logging::error!(f, "Unexpected token found when parsing an expression here")
-            }
-            Self::ExpectedBinaryOperator => {
-                logging::error!(f, "Expected a binary operator here")
-            }
-            Self::UnclosedParenthesis => {
-                logging::error!(
-                    f,
-                    "Found unbalanced parenthesis when parsing an enclosed expression"
-                )
-            }
-            Self::UnexpectedToken => {
-                logging::error!(f, "Found an unexpected token when parsing statement")
-            }
-            Self::ExpectedIdentifier => {
-                logging::error!(f, "Expected an identifier here (variable name?)")
-            }
-            Self::ExpectedSemicolonAfterStatement => {
-                logging::error!(f, "Expected a semicolon here to terminate a statement")
-            }
-            Self::ExpectedBlockBegin => {
-                logging::error!(
-                    f,
-                    "Expected a `{{` here to start a block, for a `if` or `while` statement"
-                )
-            }
-            Self::ExpectedBlockEnd => {
-                logging::error!(
-                    f,
-                    "Expected a `}}` here to end a block, of a `if` or `while` statement"
-                )
-            }
-            Self::ExpectedBindingName => {
-                logging::error!(f, "Expected here to be a name for a variable")
-            }
-            Self::ExpectedTypeName => {
-                logging::error!(f, "Expected here to be a name of a type")
-            }
-            Self::ExpectedColonAfterLetBindingName => {
-                logging::error!(f, "Expected a colon separator after the name of a variable")
-            }
-            Self::ExpectedFunctionName => {
-                logging::error!(f, "Expected a function name to be here")
-            }
-            Self::ExpectedFunctionArgListBegin => {
-                logging::error!(f, "Expected a `(` to begin a function argument list")
-            }
-            Self::ExpectedFunctionArgListEnd => {
-                logging::error!(f, "Expected a `)` to end a function argument list")
-            }
-            Self::ExpectedFunctionReturnType => {
-                logging::error!(f, "Expected a type name to end the function `header`")
-            }
-            Self::FunctionDefinitionWithinFunction => {
-                logging::error!(
-                    f,
-                    "Found an attempt to define a function within a function, that is not allowed"
-                )
-            }
+        write!(f, "func {}(", self.name)?;
+        for arg in &self.args {
+            write!(f, "{arg:?},")?;
         }
+        write!(f, ")")
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Expression {
-    Integer(u64),
-    Char(char),
-    Bool(bool),
-    Identifier(String),
-    Binary {
-        left: Box<Spanned<Expression>>,
-        op: lexer::Operator,
-        right: Box<Spanned<Expression>>,
-    },
-    Unary {
-        op: lexer::Operator,
-        right: Box<Spanned<Expression>>,
-    },
-    FuncCall {
-        name: String,
-        args: Vec<Spanned<Expression>>,
-    },
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Statement {
     Return(Spanned<Expression>),
+    If {
+        cond: Spanned<Expression>,
+        body: Vec<Spanned<Statement>>,
+    },
+    While {
+        cond: Spanned<Expression>,
+        body: Vec<Spanned<Statement>>,
+    },
     VarAssign {
         name: String,
         t: String,
@@ -731,16 +636,95 @@ pub enum Statement {
         name: String,
         expr: Spanned<Expression>,
     },
-    If {
-        cond: Spanned<Expression>,
-        body: Vec<Spanned<Statement>>,
+    FuncCall {
+        name: String,
+        args: Vec<Spanned<Expression>>
+    }
+}
+
+#[derive(Debug)]
+pub enum Expression {
+    Integer(u64),
+    Char(char),
+    Bool(bool),
+    Identifier(String),
+    Unary {
+        op: Operator,
+        right: Box<Spanned<Expression>>,
     },
-    While {
-        cond: Spanned<Expression>,
-        body: Vec<Spanned<Statement>>,
+    Binary {
+        left: Box<Spanned<Expression>>,
+        op: Operator,
+        right: Box<Spanned<Expression>>,
     },
     FuncCall {
         name: String,
         args: Vec<Spanned<Expression>>,
     },
+}
+
+pub enum Error {
+    ExpectedToken { expected: Token, got: Option<Token> },
+    UnexpectedToken,
+    ExpectedStartOfStatement,
+    NestedFunctionDefinition,
+    BooleanExpressionAsStatement,
+    UnexpectedTokenAfterIdentifierInStatement { got: Option<Token> },
+    ExpectedBinaryOperator,
+    UnbalancedParenthesis,
+    ExpectedExpression,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ExpectedToken { expected, got } => {
+                let got_name = match got {
+                    None => "nothing".to_string(),
+                    Some(v) => format!("{v:?}"),
+                };
+                logging::error!(f, "Expected {expected:?}, instead got {got_name}")
+            }
+            Self::ExpectedStartOfStatement => {
+                logging::error!(f, "Expected start of statement")
+            }
+            Self::NestedFunctionDefinition => {
+                logging::error!(f, "Nested function definitions are not allowed YET")
+            }
+            Self::BooleanExpressionAsStatement => {
+                logging::error!(
+                    f,
+                    "Found an attempt to use a boolean (`true` or `false`) as a statement"
+                )
+            }
+            Self::UnexpectedTokenAfterIdentifierInStatement { got } => {
+                let got_name = match got {
+                    None => "nothing".to_string(),
+                    Some(v) => format!("{v:?}"),
+                };
+                logging::errorln!(
+                    f,
+                    "Unexpected token found after an identifier in a statement context: {got_name}"
+                )?;
+                logging::helpln!(
+                    f,
+                    "After that name you can put a parenthesis pair to make a function call or make a assigment operation"
+                )?;
+                logging::noteln!(f, "Function call: name(...)")?;
+                logging::note!(f, "Assignment: name = ...")
+            }
+            Self::ExpectedBinaryOperator => {
+                logging::error!(f, "Expected here to be a binary operator")
+            }
+            Self::UnexpectedToken => {
+                logging::error!(f, "Found an unexpected token")
+            }
+            Self::UnbalancedParenthesis => {
+                logging::error!(f, "Found an unbalanced parenthesis pairs")
+            }
+            Self::ExpectedExpression => {
+                logging::error!(f, "Expected here to be an expression here")
+            }
+        }
+    }
 }
