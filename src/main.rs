@@ -32,7 +32,6 @@ fn main() -> Result<(), ()> {
             return Err(());
         }
     };
-    dbg!(&module);
 
     let no_ext = &args.input[..args.input.len() - 3];
 

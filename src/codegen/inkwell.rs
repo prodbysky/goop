@@ -292,7 +292,6 @@ pub fn generate_code(module: ir::Module, no_ext: &str, out_name: &str) {
     let mut cg = Codegen::new(&ctx);
 
     let module = cg.gen_module(module).unwrap();
-    module.print_to_stderr();
 
     let assembly_name = format!("{no_ext}.s");
     module.verify().unwrap();
