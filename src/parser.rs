@@ -25,6 +25,30 @@ impl<'a> Parser<'a> {
         let begin = self.expect_keyword(Keyword::Func)?;
         let identifier = self.expect_name()?;
         self.expect_token(Token::OpenParen)?;
+
+        let mut args = vec![];
+
+        while self.peek().is_some_and(|t| t.v != Token::CloseParen) {
+            let name = self.expect_name()?;
+            let type_name = self.expect_name()?;
+            args.push((name.v, type_name.v));
+            match self.peek() {
+                None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
+                Some(Spanned {
+                    v: Token::Comma,
+                    ..
+                }) => self.next(),
+                Some(Spanned {
+                    v: Token::CloseParen,
+                    ..
+                }) => {
+                    break;
+                }
+                Some(Spanned { .. }) => {
+                    return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken));
+                }
+            };
+        }
         self.expect_token(Token::CloseParen)?;
         let return_type = self.expect_name()?;
         let (body, end) = self.parse_block()?;
@@ -36,6 +60,7 @@ impl<'a> Parser<'a> {
                 name: identifier.v,
                 body,
                 ret_type: return_type.v,
+                args
             },
         })
     }
@@ -582,13 +607,14 @@ impl Module {
 pub struct Function {
     pub name: String,
     body: Vec<Spanned<Statement>>,
+    args: Vec<(String, String)>,
     ret_type: String,
 }
 
 impl Function {
     pub fn get_type(&self) -> FunctionType {
         let name = &self.name;
-        let args = vec![];
+        let args = self.args.iter().map(|(name, type_name)| (name.clone(), ir::type_from_type_name(&type_name))).collect();
         let ret = ir::type_from_type_name(&self.ret_type);
         FunctionType { name: name.to_string(), args, ret }
     }

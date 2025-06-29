@@ -36,7 +36,12 @@ impl Module {
         }
 
         for f in ast_module.funcs() {
+            let f_type = f.v.get_type();
             let func = s.add_function(f.v.name.clone(), f.v.get_type());
+            for arg in &f_type.args {
+                let index = func.alloc_temp(arg.1.clone());
+                func.vars.insert(arg.0.clone(), Value::Temp{t: arg.1.to_owned(), i: index});
+            }
             for st in f.v.body() {
                 func.add_statement(&st, &func_types)?;
             }
@@ -53,6 +58,7 @@ impl Module {
             values: vec![],
             max_labels: 0,
             vars: HashMap::new(),
+            args: fn_type.args,
         });
         self.functions.last_mut().unwrap()
     }
@@ -74,6 +80,7 @@ pub struct Function {
     values: Vec<Value>,
     vars: HashMap<String, Value>,
     max_labels: LabelIndex,
+    args: Vec<(String, Type)>,
 }
 
 impl Function {
@@ -81,8 +88,12 @@ impl Function {
         parser::FunctionType {
             name: self.name.clone(),
             ret: self.ret_type.clone(),
-            args: vec![],
+            args: self.args.clone(),
         }
+    }
+
+    pub fn args(&self) -> &[(String, Type)] {
+        &self.args
     }
     fn add_statement(
         &mut self,
@@ -575,7 +586,8 @@ pub fn type_from_type_name(n: &str) -> Type {
         "i32" => Type::U64,
         "char" => Type::Char,
         "bool" => Type::Bool,
-        _ => todo!(),
+        "void" => Type::Void,
+        _ => todo!()
     }
 }
 

@@ -26,12 +26,6 @@ impl<'a> Codegen<'a> {
 
         for f in module.functions() {
             let fn_type_ir = f.get_type();
-            let ret_type = match fn_type_ir.ret {
-                ir::Type::U64 => u64_type,
-                ir::Type::Bool => bool_type,
-                ir::Type::Char => char_type,
-                ir::Type::Void => todo!("i dont know what to do here"),
-            };
             let mut args = vec![];
             for arg in fn_type_ir.args {
                 args.push(
@@ -44,7 +38,13 @@ impl<'a> Codegen<'a> {
                     .into(),
                 );
             }
-            let fn_type = ret_type.fn_type(&args, false);
+            let fn_type = match fn_type_ir.ret {
+                ir::Type::U64 => u64_type.fn_type(&args, false),
+                ir::Type::Bool => bool_type.fn_type(&args, false),
+                ir::Type::Char => char_type.fn_type(&args, false),
+                ir::Type::Void => void.fn_type(&args, false),
+            };
+
             llvm_module.add_function(f.name(), fn_type, Some(inkwell::module::Linkage::External));
         }
 
@@ -70,6 +70,10 @@ impl<'a> Codegen<'a> {
                     },
                     _ => todo!(),
                 }
+            }
+            for (i, arg) in f.args().iter().enumerate() {
+                let llvm_arg = func.get_nth_param(i as u32).unwrap().into_int_value();
+                self.builder.build_store(locals[i], llvm_arg)?;
             }
 
             let mut label_blocks = std::collections::HashMap::new();
@@ -263,10 +267,14 @@ impl<'a> Codegen<'a> {
                     }
                 }
             }
-
+            let is_void_fn = matches!(f.get_type().ret, ir::Type::Void);
             if !has_terminator && current_block.get_terminator().is_none() {
-                self.builder
-                    .build_return(Some(&u64_type.const_int(0, false)))?;
+                if is_void_fn {
+                    self.builder.build_return(None)?;
+                } else {
+                    self.builder
+                        .build_return(Some(&u64_type.const_int(0, false)))?;
+                }
             }
         }
         Ok(llvm_module)
@@ -292,6 +300,7 @@ pub fn generate_code(module: ir::Module, no_ext: &str, out_name: &str) {
     let mut cg = Codegen::new(&ctx);
 
     let module = cg.gen_module(module).unwrap();
+    module.print_to_stderr();
 
     let assembly_name = format!("{no_ext}.s");
     module.verify().unwrap();
