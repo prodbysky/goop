@@ -13,23 +13,6 @@ impl Module {
         let mut s = Self { functions: vec![] };
 
         let mut func_types = HashMap::new();
-        func_types.insert(
-            "getchar".to_string(),
-            parser::FunctionType {
-                name: "getchar".to_string(),
-                ret: Type::Char,
-                args: vec![],
-            },
-        );
-        func_types.insert(
-            "putchar".to_string(),
-            parser::FunctionType {
-                name: "putchar".to_string(),
-                ret: Type::Void,
-                args: vec![("c".to_string(), Type::Char)],
-            },
-        );
-
         for f in ast_module.funcs() {
             let t = f.v.get_type();
             func_types.insert(t.name.to_string(), t);
@@ -37,20 +20,29 @@ impl Module {
 
         for f in ast_module.funcs() {
             let f_type = f.v.get_type();
-            let func = s.add_function(f.v.name.clone(), f.v.get_type());
-            for arg in &f_type.args {
-                let index = func.alloc_temp(arg.1.clone());
-                func.vars.insert(arg.0.clone(), Value::Temp{t: arg.1.to_owned(), i: index});
-            }
-            for st in f.v.body() {
-                func.add_statement(&st, &func_types)?;
+            let ext = match f.v.body() {
+                Some(_) => false,
+                None => true
+            };
+            let func = s.add_function(f.v.name.clone(), f.v.get_type(), ext);
+            match f.v.body() {
+                Some(b) => {
+                for arg in &f_type.args {
+                    let index = func.alloc_temp(arg.1.clone());
+                    func.vars.insert(arg.0.clone(), Value::Temp{t: arg.1.to_owned(), i: index});
+                }
+                for st in b {
+                    func.add_statement(&st, &func_types)?;
+                }
+                },
+                None => {}
             }
         }
 
         Ok(s)
     }
 
-    fn add_function(&mut self, name: String, fn_type: parser::FunctionType) -> &mut Function {
+    fn add_function(&mut self, name: String, fn_type: parser::FunctionType, external: bool) -> &mut Function {
         self.functions.push(Function {
             name,
             body: vec![],
@@ -59,6 +51,7 @@ impl Module {
             max_labels: 0,
             vars: HashMap::new(),
             args: fn_type.args,
+            external
         });
         self.functions.last_mut().unwrap()
     }
@@ -81,6 +74,7 @@ pub struct Function {
     vars: HashMap<String, Value>,
     max_labels: LabelIndex,
     args: Vec<(String, Type)>,
+    pub external: bool
 }
 
 impl Function {

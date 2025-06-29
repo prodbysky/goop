@@ -21,8 +21,6 @@ impl<'a> Codegen<'a> {
         let bool_type = self.ctx.bool_type();
         let void = self.ctx.void_type();
 
-        llvm_module.add_function("putchar", void.fn_type(&[char_type.into()], false), None);
-        llvm_module.add_function("getchar", char_type.fn_type(&[], false), None);
 
         for f in module.functions() {
             let fn_type_ir = f.get_type();
@@ -49,6 +47,7 @@ impl<'a> Codegen<'a> {
         }
 
         for f in module.functions() {
+            if f.external {continue;}
             let func = llvm_module.get_function(&f.name()).unwrap();
             let block = self.ctx.append_basic_block(func, "entry");
             self.builder.position_at_end(block);
@@ -71,7 +70,7 @@ impl<'a> Codegen<'a> {
                     _ => todo!(),
                 }
             }
-            for (i, arg) in f.args().iter().enumerate() {
+            for (i, _) in f.args().iter().enumerate() {
                 let llvm_arg = func.get_nth_param(i as u32).unwrap().into_int_value();
                 self.builder.build_store(locals[i], llvm_arg)?;
             }
@@ -300,7 +299,6 @@ pub fn generate_code(module: ir::Module, no_ext: &str, out_name: &str) {
     let mut cg = Codegen::new(&ctx);
 
     let module = cg.gen_module(module).unwrap();
-    module.print_to_stderr();
 
     let assembly_name = format!("{no_ext}.s");
     module.verify().unwrap();

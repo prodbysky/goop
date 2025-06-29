@@ -15,10 +15,22 @@ impl<'a> Parser<'a> {
         let mut module = Module::new();
 
         while !self.finished() {
-            module.functions.push(self.parse_function()?);
+            module.functions.push(self.parse_top_level()?);
         }
 
         Ok(module)
+    }
+
+    fn parse_top_level(&mut self) -> Result<Spanned<Function>, Spanned<Error>> {
+        match self.peek() {
+            Some(Spanned { v: Token::Keyword(Keyword::Func), .. }) => {
+                self.parse_function()
+            }
+            Some(Spanned { v: Token::Keyword(Keyword::Extern), .. }) => {
+                self.parse_extern()
+            }
+            _ => todo!()
+        }
     }
 
     fn parse_function(&mut self) -> Result<Spanned<Function>, Spanned<Error>> {
@@ -58,7 +70,7 @@ impl<'a> Parser<'a> {
             line_beginning: begin.line_beginning,
             v: Function {
                 name: identifier.v,
-                body,
+                body: Some(body),
                 ret_type: return_type.v,
                 args
             },
@@ -273,6 +285,53 @@ impl<'a> Parser<'a> {
             v: Statement::FuncCall { name, args },
         })
     }
+
+    /// extern func [name](([name] [type])*) [ret];
+    fn parse_extern(&mut self) -> Result<Spanned<Function>, Spanned<Error>> {
+        let begin = self.expect_keyword(Keyword::Extern)?;
+        self.expect_keyword(Keyword::Func)?;
+        let identifier = self.expect_name()?;
+        self.expect_token(Token::OpenParen)?;
+
+        let mut args = vec![];
+
+        while self.peek().is_some_and(|t| t.v != Token::CloseParen) {
+            let name = self.expect_name()?;
+            let type_name = self.expect_name()?;
+            args.push((name.v, type_name.v));
+            match self.peek() {
+                None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
+                Some(Spanned {
+                    v: Token::Comma,
+                    ..
+                }) => self.next(),
+                Some(Spanned {
+                    v: Token::CloseParen,
+                    ..
+                }) => {
+                    break;
+                }
+                Some(Spanned { .. }) => {
+                    return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken));
+                }
+            };
+        }
+        self.expect_token(Token::CloseParen)?;
+        let return_type = self.expect_name()?;
+        let end = self.expect_semicolon()?;
+        Ok(Spanned {
+            offset: begin.offset,
+            len: end.offset - begin.offset,
+            line_beginning: begin.line_beginning,
+            v: Function {
+                name: identifier.v,
+                body: None,
+                ret_type: return_type.v,
+                args
+            },
+        })
+    }
+
     fn parse_expression(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
         self.parse_cmp()
     }
@@ -606,7 +665,8 @@ impl Module {
 #[derive(Debug)]
 pub struct Function {
     pub name: String,
-    body: Vec<Spanned<Statement>>,
+    /// If body is None then its an external function
+    body: Option<Vec<Spanned<Statement>>>,
     args: Vec<(String, String)>,
     ret_type: String,
 }
@@ -618,8 +678,8 @@ impl Function {
         let ret = ir::type_from_type_name(&self.ret_type);
         FunctionType { name: name.to_string(), args, ret }
     }
-    pub fn body(&self) -> &[Spanned<Statement>] {
-        &self.body
+    pub fn body(&self) -> Option<&[Spanned<Statement>]> {
+        self.body.as_deref()
     }
 }
 
@@ -665,7 +725,7 @@ pub enum Statement {
     FuncCall {
         name: String,
         args: Vec<Spanned<Expression>>
-    }
+    },
 }
 
 #[derive(Debug)]

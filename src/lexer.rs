@@ -41,6 +41,7 @@ pub enum Keyword {
     If,
     While,
     Func,
+    Extern
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -180,6 +181,12 @@ impl<'a> Lexer<'a> {
                             len: end - begin,
                             line_beginning: begin_line,
                             v: Token::Keyword(Keyword::Func),
+                        }),
+                        "extern" => tokens.push(Spanned {
+                            offset: begin,
+                            len: end - begin,
+                            line_beginning: begin_line,
+                            v: Token::Keyword(Keyword::Extern),
                         }),
                         _ => tokens.push(Spanned {
                             offset: begin,
