@@ -11,15 +11,14 @@ of my projects just get slapped into `/dev/null`.
 
 ## Features
 - `if` statements and `while` loops
-- Functions that can only return values (no arguments)
+- Functions that can take in arguments
+- aaand that's it :3
 
 ## Backends supported
 - LLVM via `inkwell`
 
 ## TODO
 - Other backends (maybe even generating our own assembly)
-- Function arguments
-- Proper backend value types (not everything being a i64)
 
 ## Hopeful goals for this language
 - [ ] Compiled
