@@ -114,16 +114,19 @@ impl Function {
                     });
                 }
                 let v = self.add_expr(expr, funcs)?;
-                if v.get_type() != &type_from_type_name(t) {
-                    return Err(Spanned {
-                        offset: s.offset,
-                        len: s.len,
-                        line_beginning: s.line_beginning,
-                        v: Error::UnexpectedType {
-                            got: v.get_type().clone(),
-                            expect: type_from_type_name(t),
-                        },
-                    });
+                if t.is_some() {
+                    let t = t.clone().unwrap();
+                    if v.get_type() != &type_from_type_name(&t) {
+                        return Err(Spanned {
+                            offset: s.offset,
+                            len: s.len,
+                            line_beginning: s.line_beginning,
+                            v: Error::UnexpectedType {
+                                got: v.get_type().clone(),
+                                expect: type_from_type_name(&t),
+                            },
+                        });
+                    }
                 }
                 self.vars.insert(name.to_string(), v);
             }
@@ -246,18 +249,21 @@ impl Function {
         funcs: &HashMap<String, parser::FunctionType>,
     ) -> Result<Value, Spanned<Error>> {
         match &e.v {
-            parser::Expression::Integer(i) => Ok(Value::Const {
-                t: Type::U64,
-                v: *i,
-            }),
-            parser::Expression::Char(c) => Ok(Value::Const {
-                t: Type::Char,
-                v: *c as u64,
-            }),
-            parser::Expression::Bool(b) => Ok(Value::Const {
-                t: Type::Bool,
-                v: *b as u64,
-            }),
+            parser::Expression::Integer(i) => {
+                let place = self.alloc_temp(Type::U64);
+                self.body.push(Instr::Assign { index: place, v: Value::Const { t: Type::U64, v: *i } });
+                Ok(Value::Temp { t: Type::U64, i: place })
+            } 
+            parser::Expression::Char(c) => {
+                let place = self.alloc_temp(Type::Char);
+                self.body.push(Instr::Assign { index: place, v: Value::Const { t: Type::Char, v: *c as u64 } });
+                Ok(Value::Temp { t: Type::Char, i: place })
+            },
+            parser::Expression::Bool(b) => {
+                let place = self.alloc_temp(Type::Bool);
+                self.body.push(Instr::Assign { index: place, v: Value::Const { t: Type::Bool, v: *b as u64 } });
+                Ok(Value::Temp { t: Type::Bool, i: place })
+            },
             parser::Expression::Identifier(id) => match self.vars.get(id) {
                 None => {
                     Err(Spanned {

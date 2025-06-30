@@ -214,14 +214,12 @@ impl<'a> Parser<'a> {
         self.expect_token(Token::Colon)?;
         let type_name = match self.expect_name() {
             Ok(v) => Some(v.v),
-            Err(_) => {
-                self.next();
-                None
-            }
+            Err(_) => None
         };
         self.expect_token(Token::Assign)?;
         let value = self.parse_expression()?;
         let end = self.expect_semicolon()?;
+
         Ok(Spanned {
             offset: begin.offset,
             len: end.offset - begin.offset,
@@ -241,7 +239,6 @@ impl<'a> Parser<'a> {
         begin_token: &Spanned<String>,
     ) -> Result<Spanned<Statement>, Spanned<Error>> {
         let name = begin_token.v.clone();
-        self.expect_token(Token::Assign)?;
         let value = self.parse_expression()?;
         let end = self.expect_semicolon()?;
         Ok(Spanned {
@@ -649,6 +646,8 @@ impl<'a> Parser<'a> {
     }
 }
 
+
+#[derive(Debug)]
 pub struct Parser<'a> {
     tokens: &'a [Spanned<Token>],
     prev_token: &'a Spanned<Token>,
