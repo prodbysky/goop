@@ -212,9 +212,10 @@ impl<'a> Parser<'a> {
         let begin = self.next().unwrap();
         let name = self.expect_name()?.v;
         self.expect_token(Token::Colon)?;
-        let type_name = match self.expect_name() {
-            Ok(v) => Some(v.v),
-            Err(_) => None
+        let type_name = if self.peek().is_some_and(|t| t.v == Token::Assign) {
+            None
+        } else {
+            Some(self.expect_name()?.v)
         };
         self.expect_token(Token::Assign)?;
         let value = self.parse_expression()?;
