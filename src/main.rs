@@ -36,7 +36,7 @@ fn main() -> Result<(), ()> {
             }
         };
 
-        let no_ext = &name[..name.len() - 3];
+        let no_ext = std::path::Path::new(&name).file_stem().and_then(|s| s.to_str()).unwrap_or(&name);
 
         codegen::inkwell::generate_code(module, no_ext);
         objects.push(format!("{no_ext}.o"));
