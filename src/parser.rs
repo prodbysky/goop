@@ -206,16 +206,20 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// let [name]: [type_name] = [expr];
-    /// NOTE: The `expr` has to be a boolean
+    /// let [name]: Optional[type_name] = [expr];
     fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
         let begin = self.next().unwrap();
         let name = self.expect_name()?.v;
         self.expect_token(Token::Colon)?;
-        let type_name = self.expect_name()?.v;
+        let type_name = if self.peek().is_some_and(|t| t.v == Token::Assign) {
+            None
+        } else {
+            Some(self.expect_name()?.v)
+        };
         self.expect_token(Token::Assign)?;
         let value = self.parse_expression()?;
         let end = self.expect_semicolon()?;
+
         Ok(Spanned {
             offset: begin.offset,
             len: end.offset - begin.offset,
@@ -235,7 +239,6 @@ impl<'a> Parser<'a> {
         begin_token: &Spanned<String>,
     ) -> Result<Spanned<Statement>, Spanned<Error>> {
         let name = begin_token.v.clone();
-        self.expect_token(Token::Assign)?;
         let value = self.parse_expression()?;
         let end = self.expect_semicolon()?;
         Ok(Spanned {
@@ -643,6 +646,8 @@ impl<'a> Parser<'a> {
     }
 }
 
+
+#[derive(Debug)]
 pub struct Parser<'a> {
     tokens: &'a [Spanned<Token>],
     prev_token: &'a Spanned<Token>,
@@ -715,7 +720,7 @@ pub enum Statement {
     },
     VarAssign {
         name: String,
-        t: String,
+        t: Option<String>,
         expr: Spanned<Expression>,
     },
     VarReassign {
