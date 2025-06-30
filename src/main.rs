@@ -41,13 +41,28 @@ fn main() -> Result<(), ()> {
         codegen::inkwell::generate_code(module, no_ext);
         objects.push(format!("{no_ext}.o"));
     }
-    std::process::Command::new("clang").args(&objects).arg("-o").arg(&args.output).spawn().unwrap().wait().unwrap();
+    let out = std::process::Command::new("clang").args(&objects).arg("-o").arg(&args.output).output().map_err(|e| {
+        println!("[{}]: Failed to execute clang: {e}", "Error".red());
+        ()
+    })?;
+    if !out.status.success() {
+        eprintln!("[{}]: Linking failed", "Error".red());
+        eprintln!("{}", String::from_utf8_lossy(&out.stderr));
+        return Err(());
+    }
     println!(
         "[{}]:  Compilation took: {:.2?}",
         "Info".green(),
         pre.elapsed()
     );
-    std::process::Command::new("rm").args(&objects).spawn().unwrap().wait().unwrap();
+    for o in &objects {
+        match std::fs::remove_file(o) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("[{}]: Failed to remove file {o}: {e}", "Error".red())
+            }
+        };
+    }
 
     Ok(())
 }
