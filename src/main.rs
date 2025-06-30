@@ -43,7 +43,7 @@ fn main() -> Result<(), ()> {
     }
     let out = std::process::Command::new("clang").args(&objects).arg("-o").arg(&args.output).output().map_err(|e| {
         println!("[{}]: Failed to execute clang: {e}", "Error".red());
-        ()
+        
     })?;
     if !out.status.success() {
         eprintln!("[{}]: Linking failed", "Error".red());
@@ -72,7 +72,7 @@ fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
         Ok(ts) => ts,
         Err(e) => {
             eprintln!("{}", e.v);
-            display_diagnostic_info(&input, name, &e);
+            display_diagnostic_info(input, name, &e);
             return Err(());
         }
     };
@@ -81,7 +81,7 @@ fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
         Ok(p) => p,
         Err(e) => {
             eprintln!("{}", e.v);
-            display_diagnostic_info(&input, name, &e);
+            display_diagnostic_info(input, name, &e);
             return Err(());
         }
     };

@@ -20,22 +20,16 @@ impl Module {
 
         for f in ast_module.funcs() {
             let f_type = f.v.get_type();
-            let ext = match f.v.body() {
-                Some(_) => false,
-                None => true
-            };
+            let ext = f.v.body().is_none();
             let func = s.add_function(f.v.name.clone(), f.v.get_type(), ext);
-            match f.v.body() {
-                Some(b) => {
-                for arg in &f_type.args {
-                    let index = func.alloc_temp(arg.1.clone());
-                    func.vars.insert(arg.0.clone(), Value::Temp{t: arg.1.to_owned(), i: index});
-                }
-                for st in b {
-                    func.add_statement(&st, &func_types)?;
-                }
-                },
-                None => {}
+            if let Some(b) = f.v.body() {
+            for arg in &f_type.args {
+                let index = func.alloc_temp(arg.1.clone());
+                func.vars.insert(arg.0.clone(), Value::Temp{t: arg.1.to_owned(), i: index});
+            }
+            for st in b {
+                func.add_statement(st, &func_types)?;
+            }
             }
         }
 
@@ -96,7 +90,7 @@ impl Function {
     ) -> Result<(), Spanned<Error>> {
         match &s.v {
             parser::Statement::Return(v) => {
-                let v_ir = self.add_expr(&v, funcs)?;
+                let v_ir = self.add_expr(v, funcs)?;
                 if *v_ir.get_type() != self.ret_type {
                     return Err(Spanned {
                         offset: v.offset,
@@ -119,7 +113,7 @@ impl Function {
                         v: Error::VariableRedefinition,
                     });
                 }
-                let v = self.add_expr(&expr, funcs)?;
+                let v = self.add_expr(expr, funcs)?;
                 if v.get_type() != &type_from_type_name(t) {
                     return Err(Spanned {
                         offset: s.offset,
@@ -142,7 +136,7 @@ impl Function {
                         v: Error::UndefinedVariableRedefinition,
                     });
                 }
-                let v = self.add_expr(&expr, funcs)?;
+                let v = self.add_expr(expr, funcs)?;
                 let prev = match self.vars.get(name).unwrap() {
                     Value::Temp { t: _, i } => *i,
                     _ => unreachable!(),
@@ -150,7 +144,7 @@ impl Function {
                 self.body.push(Instr::Assign { index: prev, v });
             }
             parser::Statement::If { cond, body } => {
-                let cond = self.add_expr(&cond, funcs)?;
+                let cond = self.add_expr(cond, funcs)?;
                 if cond.get_type() != &Type::Bool {
                     return Err(Spanned {
                         offset: s.offset,
@@ -168,7 +162,7 @@ impl Function {
                 });
                 self.body.push(Instr::Label(into));
                 for s in body {
-                    self.add_statement(&s, funcs)?;
+                    self.add_statement(s, funcs)?;
                 }
                 self.body.push(Instr::Label(over));
             }
@@ -177,15 +171,15 @@ impl Function {
                 let into = self.alloc_label();
                 let over = self.alloc_label();
                 self.body.push(Instr::Label(header));
-                let cond = self.add_expr(&cond, funcs)?;
+                let cond = self.add_expr(cond, funcs)?;
                 self.body.push(Instr::Jnz {
-                    cond: cond,
+                    cond,
                     to: into,
                     otherwise: over,
                 });
                 self.body.push(Instr::Label(into));
                 for s in body {
-                    self.add_statement(&s, funcs)?;
+                    self.add_statement(s, funcs)?;
                 }
                 self.body.push(Instr::Jump(header));
                 self.body.push(Instr::Label(over));
@@ -219,7 +213,7 @@ impl Function {
                 }
 
                 for arg in args {
-                    args_into.push(self.add_expr(&arg, funcs)?);
+                    args_into.push(self.add_expr(arg, funcs)?);
                 }
 
                 for i in 0..args.len() {
@@ -266,18 +260,18 @@ impl Function {
             }),
             parser::Expression::Identifier(id) => match self.vars.get(id) {
                 None => {
-                    return Err(Spanned {
+                    Err(Spanned {
                         offset: e.offset,
                         len: e.len,
                         line_beginning: e.line_beginning,
                         v: Error::UndefinedVariable,
-                    });
+                    })
                 }
                 Some(v) => Ok(v.clone()),
             },
             parser::Expression::Binary { left, op, right } => {
-                let l = self.add_expr(&left, funcs)?;
-                let r = self.add_expr(&right, funcs)?;
+                let l = self.add_expr(left, funcs)?;
+                let r = self.add_expr(right, funcs)?;
                 use crate::lexer::Operator as Op;
                 let result_type = match (l.get_type(), op, r.get_type()) {
                     (
@@ -310,7 +304,7 @@ impl Function {
                 })
             }
             parser::Expression::Unary { op, right } => {
-                let r = self.add_expr(&right, funcs)?;
+                let r = self.add_expr(right, funcs)?;
                 let result_type = r.get_type().clone();
                 let place = self.alloc_temp(result_type.clone());
 
@@ -355,7 +349,7 @@ impl Function {
                 }
                 let mut send_load = vec![];
                 for arg in args {
-                    send_load.push(self.add_expr(&arg, funcs)?);
+                    send_load.push(self.add_expr(arg, funcs)?);
                 }
                 for i in 0..args.len() {
                     if send_load[i].get_type() != &receiver.args[i].1 {

@@ -48,7 +48,7 @@ impl<'a> Codegen<'a> {
 
         for f in module.functions() {
             if f.external {continue;}
-            let func = llvm_module.get_function(&f.name()).unwrap();
+            let func = llvm_module.get_function(f.name()).unwrap();
             let block = self.ctx.append_basic_block(func, "entry");
             self.builder.position_at_end(block);
 
@@ -79,7 +79,7 @@ impl<'a> Codegen<'a> {
 
             for i in f.body().iter() {
                 if let ir::Instr::Label(l) = i {
-                    let bb = self.ctx.append_basic_block(func, &format!("l_{}", l));
+                    let bb = self.ctx.append_basic_block(func, &format!("l_{l}"));
                     label_blocks.insert(*l, bb);
                 }
             }

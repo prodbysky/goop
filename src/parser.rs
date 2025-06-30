@@ -81,7 +81,7 @@ impl<'a> Parser<'a> {
         self.expect_token(Token::OpenCurly)?;
         let mut body = vec![];
 
-        while self.peek().is_some_and(|t| &t.v != &Token::CloseCurly) {
+        while self.peek().is_some_and(|t| t.v != Token::CloseCurly) {
             body.push(self.parse_statement()?);
         }
         let end = self.expect_token(Token::CloseCurly)?;
@@ -374,7 +374,7 @@ impl<'a> Parser<'a> {
             return Ok(Spanned {
                 offset,
                 len: right.offset - offset,
-                line_beginning: line_beginning,
+                line_beginning,
                 v: Expression::Unary {
                     op,
                     right: Box::new(right),
@@ -674,7 +674,7 @@ pub struct Function {
 impl Function {
     pub fn get_type(&self) -> FunctionType {
         let name = &self.name;
-        let args = self.args.iter().map(|(name, type_name)| (name.clone(), ir::type_from_type_name(&type_name))).collect();
+        let args = self.args.iter().map(|(name, type_name)| (name.clone(), ir::type_from_type_name(type_name))).collect();
         let ret = ir::type_from_type_name(&self.ret_type);
         FunctionType { name: name.to_string(), args, ret }
     }
