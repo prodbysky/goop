@@ -280,7 +280,7 @@ impl<'a> Codegen<'a> {
     }
 }
 
-pub fn generate_code(module: ir::Module, no_ext: &str, out_name: &str) {
+pub fn generate_code(module: ir::Module, no_ext: &str) {
     inkwell::targets::Target::initialize_all(&inkwell::targets::InitializationConfig::default());
     let ctx = inkwell::context::Context::create();
     let triple = inkwell::targets::TargetMachine::get_default_triple();
@@ -300,27 +300,13 @@ pub fn generate_code(module: ir::Module, no_ext: &str, out_name: &str) {
 
     let module = cg.gen_module(module).unwrap();
 
-    let assembly_name = format!("{no_ext}.s");
+    let assembly_name = format!("{no_ext}.o");
     module.verify().unwrap();
     machine
         .write_to_file(
             &module,
-            inkwell::targets::FileType::Assembly,
+            inkwell::targets::FileType::Object,
             std::path::Path::new(assembly_name.as_str()),
         )
-        .unwrap();
-    std::process::Command::new("clang")
-        .arg(&assembly_name)
-        .arg("-o")
-        .arg(out_name)
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
-    std::process::Command::new("rm")
-        .arg(assembly_name)
-        .spawn()
-        .unwrap()
-        .wait()
         .unwrap();
 }
