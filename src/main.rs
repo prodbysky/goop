@@ -89,22 +89,11 @@ fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
 }
 
 fn display_diagnostic_info<T>(input: &str, input_name: &str, e: &Spanned<T>) {
-    let line_offset = e.offset - e.line_beginning;
-    let line_end = input[e.line_beginning..].find('\n').unwrap_or(input.len()) + e.line_beginning;
-    let line = &input[e.line_beginning..line_end];
+    let line_count = input[..e.line_beginning].chars().filter(|&c| c == '\n').count() + 1;
 
-    let line_count = {
-        let upto = &input[0..e.line_beginning];
-        upto.chars().filter(|c| *c == '\n').count() + 1
-    };
-
-    let prefix = format!("  ./{}:{}:{}", input_name, line_count, line_offset + 1);
-    eprintln!("{prefix}\n{}", line);
-    eprintln!(
-        "{}{}",
-        " ".repeat(e.offset - e.line_beginning + 7),
-        "^".repeat(e.len)
-    );
+    println!("./{}:{}:{}", input_name, line_count, {
+        input[e.line_beginning..e.offset].chars().count() + 1
+    });
 }
 
 pub type Span = std::ops::Range<usize>;
