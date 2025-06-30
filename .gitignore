@@ -1,4 +1,4 @@
 /target
-test.gp
+*.gp
 test
 a.out
