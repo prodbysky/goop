@@ -206,13 +206,19 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// let [name]: [type_name] = [expr];
+    /// let [name]: Optional[type_name] = [expr];
     /// NOTE: The `expr` has to be a boolean
     fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
         let begin = self.next().unwrap();
         let name = self.expect_name()?.v;
         self.expect_token(Token::Colon)?;
-        let type_name = self.expect_name()?.v;
+        let type_name = match self.expect_name() {
+            Ok(v) => Some(v.v),
+            Err(_) => {
+                self.next();
+                None
+            }
+        };
         self.expect_token(Token::Assign)?;
         let value = self.parse_expression()?;
         let end = self.expect_semicolon()?;
@@ -715,7 +721,7 @@ pub enum Statement {
     },
     VarAssign {
         name: String,
-        t: String,
+        t: Option<String>,
         expr: Spanned<Expression>,
     },
     VarReassign {
