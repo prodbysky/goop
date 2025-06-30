@@ -207,7 +207,6 @@ impl<'a> Parser<'a> {
     }
 
     /// let [name]: Optional[type_name] = [expr];
-    /// NOTE: The `expr` has to be a boolean
     fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
         let begin = self.next().unwrap();
         let name = self.expect_name()?.v;
