@@ -256,7 +256,7 @@ impl Function {
         None
     }
     fn put_var(&mut self, name: &str, v: Value) {
-        self.vars.first_mut().unwrap().insert(name.to_string(), v);
+        self.vars.last_mut().unwrap().insert(name.to_string(), v);
     }
 
     fn push_scope(&mut self) {
