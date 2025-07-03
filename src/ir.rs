@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{config, logging, parser, Spanned};
+use crate::{logging, parser, Spanned};
 use colored::Colorize;
 
 #[derive(Debug, Clone)]
@@ -593,6 +593,11 @@ pub enum Instr {
         args: Vec<Value>,
         into: Option<TempIndex>,
     },
+    Cast {
+        v: Value,
+        into_type: Type,
+        into_index: TempIndex,
+    }
 }
 
 impl std::fmt::Display for Instr {
@@ -639,6 +644,9 @@ impl std::fmt::Display for Instr {
             }
             Self::Return { v } => {
                 write!(f, "Return {v:?}")
+            }
+            Self::Cast { v, into_type, into_index } => {
+                write!(f, "Temp[{into_index}] = Cast({v:?}, into {into_type:?})")
             }
         }
     }
