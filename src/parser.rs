@@ -520,6 +520,15 @@ impl<'a> Parser<'a> {
 
                 Ok(expr)
             }
+            Some(Spanned { offset, line_beginning, v: Token::Keyword(Keyword::Cast), .. }) => {
+                self.expect_token(Token::OpenParen)?;
+                let t_name = self.expect_name()?;
+                self.expect_token(Token::Comma)?;
+                let value = self.parse_expression()?;
+                self.expect_token(Token::CloseParen)?;
+                let end = self.expect_token(Token::Semicolon)?;
+                Ok(Spanned { offset: offset, len: end.offset - offset, line_beginning, v: Expression::Cast { value: Box::new(value), to: t_name.v } }) 
+            }
             None => Err(self.spanned_error_from_last_tk(Error::ExpectedExpression)),
             Some(_) => Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
         }
@@ -752,6 +761,10 @@ pub enum Expression {
         name: String,
         args: Vec<Spanned<Expression>>,
     },
+    Cast {
+        value: Box<Spanned<Expression>>,
+        to: String
+    }
 }
 
 pub enum Error {
