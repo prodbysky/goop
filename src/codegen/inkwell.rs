@@ -1,3 +1,5 @@
+use inkwell::types::{AnyTypeEnum, IntType};
+
 use crate::ir;
 
 struct Codegen<'a> {
@@ -21,20 +23,21 @@ impl<'a> Codegen<'a> {
         let bool_type = self.ctx.bool_type();
         let void = self.ctx.void_type();
 
+        fn ir_type_to_inkwell_type<'a>(ctx: &'a inkwell::context::Context, t: &ir::Type) -> IntType<'a> {
+            match t {
+                ir::Type::U64 => ctx.i64_type().into(),
+                ir::Type::Bool => ctx.bool_type().into(),
+                ir::Type::Char => ctx.i8_type().into(),
+                ir::Type::Void => todo!("i dont know what to do here"),
+            }
+        }
+
 
         for f in module.functions() {
             let fn_type_ir = f.get_type();
             let mut args = vec![];
             for arg in fn_type_ir.args {
-                args.push(
-                    match arg.1 {
-                        ir::Type::U64 => u64_type,
-                        ir::Type::Bool => bool_type,
-                        ir::Type::Char => char_type,
-                        ir::Type::Void => todo!("i dont know what to do here"),
-                    }
-                    .into(),
-                );
+                args.push(ir_type_to_inkwell_type(self.ctx, &arg.1).into());
             }
             let fn_type = match fn_type_ir.ret {
                 ir::Type::U64 => u64_type.fn_type(&args, false),
@@ -264,6 +267,10 @@ impl<'a> Codegen<'a> {
                             self.builder.build_call(func, &a, name)?;
                         }
                     }
+                    ir::Instr::Cast { v, into_type, into_index } => {
+                        let val = self.builder.build_int_truncate(get_value(v)?, ir_type_to_inkwell_type(self.ctx, into_type), "casted")?;
+                        self.builder.build_store(locals[*into_index], val)?;
+                    },
                 }
             }
             let is_void_fn = matches!(f.get_type().ret, ir::Type::Void);
