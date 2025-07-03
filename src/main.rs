@@ -12,7 +12,7 @@ fn main() -> Result<(), ()> {
     let args = config::Args::parse();
     let mut objects = vec![];
     let pre = std::time::Instant::now();
-    for name in args.input {
+    for name in &args.input {
         let input = match std::fs::read_to_string(&name) {
             Ok(i) => i,
             Err(e) => {
@@ -27,7 +27,7 @@ fn main() -> Result<(), ()> {
 
         let program = parse_source(&input, &name)?;
 
-        let module = match ir::Module::from_ast(program) {
+        let module = match ir::Module::from_ast(program, &args) {
             Ok(m) => m,
             Err(e) => {
                 eprintln!("{}", e.v);
@@ -36,14 +36,18 @@ fn main() -> Result<(), ()> {
             }
         };
 
+        if args.dump_ir {
+            println!("{module}")
+        }
+
         let no_ext = std::path::Path::new(&name).file_stem().and_then(|s| s.to_str()).unwrap_or(&name);
 
         codegen::inkwell::generate_code(module, no_ext);
         objects.push(format!("{no_ext}.o"));
     }
+
     let out = std::process::Command::new("clang").args(&objects).arg("-o").arg(&args.output).output().map_err(|e| {
         println!("[{}]: Failed to execute clang: {e}", "Error".red());
-        
     })?;
     if !out.status.success() {
         eprintln!("[{}]: Linking failed", "Error".red());

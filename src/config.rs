@@ -11,4 +11,8 @@ pub struct Args {
     /// Output executable name
     #[arg(short, default_value_t = String::from("a.out"))]
     pub output: String,
+
+    /// Dump IR?
+    #[arg(long)]
+    pub dump_ir: bool,
 }

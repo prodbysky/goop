@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Spanned, logging, parser};
+use crate::{config, logging, parser, Spanned};
 use colored::Colorize;
 
 #[derive(Debug, Clone)]
@@ -11,7 +11,6 @@ pub struct Module {
 impl Module {
     pub fn from_ast<'a>(ast_module: parser::Module) -> Result<Self, Spanned<Error>> {
         let mut s = Self { functions: vec![] };
-
         let mut func_types = HashMap::new();
         for f in ast_module.funcs() {
             let t = f.v.get_type();
@@ -33,7 +32,7 @@ impl Module {
             }
         }
 
-        Ok(s)
+       Ok(s)
     }
 
     fn add_function(&mut self, name: String, fn_type: parser::FunctionType, external: bool) -> &mut Function {
@@ -56,6 +55,27 @@ impl Module {
 
     pub fn functions(&self) -> &[Function] {
         &self.functions
+    }
+}
+
+impl std::fmt::Display for Module {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Module:")?;
+        for func in self.functions() {
+            writeln!(f, "    Function: {}", func.name())?;
+            writeln!(f, "        Arguments: {:?}", func.args())?;
+            writeln!(f, "        Return type: {:?}", func.ret_type)?;
+            if !func.external {
+                writeln!(f, "        Body:")?;
+                for st in &func.body {
+                    writeln!(f, "            {st}")?;
+                }
+            } else {
+                writeln!(f, "            External")?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -573,6 +593,55 @@ pub enum Instr {
         args: Vec<Value>,
         into: Option<TempIndex>,
     },
+}
+
+impl std::fmt::Display for Instr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Call { name, args, into } => {
+                write!(f, "{name}({args:?}) -> {into:?}")
+            }
+            Self::Add { l, r, into } => {
+                write!(f, "Temp[{into}] = {l:?} + {r:?}")
+            }
+            Self::Sub { l, r, into } => {
+                write!(f, "Temp[{into}] = {l:?} - {r:?}")
+            }
+            Self::Mul { l, r, into } => {
+                write!(f, "Temp[{into}] = {l:?} * {r:?}")
+            }
+            Self::Div { l, r, into } => {
+                write!(f, "Temp[{into}] = {l:?} / {r:?}")
+            }
+            Self::Mod { l, r, into } => {
+                write!(f, "Temp[{into}] = {l:?} % {r:?}")
+            }
+            Self::Less { l, r, into } => {
+                write!(f, "Temp[{into}] = {l:?} < {r:?}")
+            }
+            Self::More { l, r, into } => {
+                write!(f, "Temp[{into}] = {l:?} > {r:?}")
+            }
+            Self::Assign { index, v } => {
+                write!(f, "Temp[{index}] = {v:?}")
+            }
+            Self::Jnz { cond, to, otherwise } => {
+                write!(f, "Jump if {cond:?} != 0 to {to}, otherwise {otherwise}")
+            }
+            Self::Jump(to) => {
+                write!(f, "Jump to {to}")
+            }
+            Self::LogicalNot { r, into } => {
+                write!(f, "Temp[{into}] = !{r:?}")
+            }
+            Self::Label(n) => {
+                write!(f, "Label: {n}")
+            }
+            Self::Return { v } => {
+                write!(f, "Return {v:?}")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
