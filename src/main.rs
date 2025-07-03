@@ -27,7 +27,7 @@ fn main() -> Result<(), ()> {
 
         let program = parse_source(&input, &name)?;
 
-        let module = match ir::Module::from_ast(program, &args) {
+        let module = match ir::Module::from_ast(program) {
             Ok(m) => m,
             Err(e) => {
                 eprintln!("{}", e.v);
