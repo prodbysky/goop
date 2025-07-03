@@ -525,8 +525,7 @@ impl<'a> Parser<'a> {
                 let t_name = self.expect_name()?;
                 self.expect_token(Token::Comma)?;
                 let value = self.parse_expression()?;
-                self.expect_token(Token::CloseParen)?;
-                let end = self.expect_token(Token::Semicolon)?;
+                let end = self.expect_token(Token::CloseParen)?;
                 Ok(Spanned { offset: offset, len: end.offset - offset, line_beginning, v: Expression::Cast { value: Box::new(value), to: t_name.v } }) 
             }
             None => Err(self.spanned_error_from_last_tk(Error::ExpectedExpression)),
