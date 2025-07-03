@@ -428,6 +428,13 @@ impl Function {
                     i: place,
                 })
             }
+            parser::Expression::Cast { value, to } => {
+                let dest_type = type_from_type_name(&to);
+                let place = self.alloc_temp(dest_type.clone());
+                let v = self.add_expr(value, funcs)?;
+                self.body.push(Instr::Cast { v, into_type: dest_type.clone(), into_index: place });
+                Ok(Value::Temp { t: dest_type, i: place })
+            }
         }
     }
     fn alloc_temp(&mut self, t: Type) -> TempIndex {
