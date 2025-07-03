@@ -268,8 +268,17 @@ impl<'a> Codegen<'a> {
                         }
                     }
                     ir::Instr::Cast { v, into_type, into_index } => {
-                        let val = self.builder.build_int_truncate(get_value(v)?, ir_type_to_inkwell_type(self.ctx, into_type), "casted")?;
+                        let source_val = get_value(v)?;
+                        let target_type = ir_type_to_inkwell_type(self.ctx, into_type);
+                        let val = if source_val.get_type().get_bit_width() > target_type.get_bit_width() {
+                            self.builder.build_int_truncate(source_val, target_type, "cast_trunc")?
+                        } else if source_val.get_type().get_bit_width() < target_type.get_bit_width() {
+                            self.builder.build_int_z_extend(source_val, target_type, "cast_zext")?
+                        } else {
+                            source_val
+                        };
                         self.builder.build_store(locals[*into_index], val)?;
+
                     },
                 }
             }
