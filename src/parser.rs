@@ -3,7 +3,9 @@ use crate::{ir, logging};
 use crate::Spanned;
 use colored::Colorize;
 
+type ParserResult<T> = Result<T, Spanned<Error>>;
 impl<'a> Parser<'a> {
+
     pub fn new(tokens: &'a [Spanned<Token>]) -> Self {
         Self {
             tokens,
@@ -11,7 +13,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(mut self) -> Result<Module, Spanned<Error>> {
+    pub fn parse(mut self) -> ParserResult<Module> {
         let mut module = Module::new();
 
         while !self.finished() {
@@ -21,7 +23,7 @@ impl<'a> Parser<'a> {
         Ok(module)
     }
 
-    fn parse_top_level(&mut self) -> Result<Spanned<Function>, Spanned<Error>> {
+    fn parse_top_level(&mut self) -> ParserResult<Spanned<Function>> {
         match self.peek() {
             Some(Spanned { v: Token::Keyword(Keyword::Func), .. }) => {
                 self.parse_function()
@@ -33,7 +35,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_function(&mut self) -> Result<Spanned<Function>, Spanned<Error>> {
+    fn parse_function(&mut self) -> ParserResult<Spanned<Function>> {
         let begin = self.expect_keyword(Keyword::Func)?;
         let identifier = self.expect_name()?;
         self.expect_token(Token::OpenParen)?;
@@ -77,7 +79,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_block(&mut self) -> Result<(Vec<Spanned<Statement>>, Spanned<()>), Spanned<Error>> {
+    fn parse_block(&mut self) -> ParserResult<(Vec<Spanned<Statement>>, Spanned<()>)> {
         self.expect_token(Token::OpenCurly)?;
         let mut body = vec![];
 
@@ -94,7 +96,7 @@ impl<'a> Parser<'a> {
         Ok((body, end_span))
     }
 
-    fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+    fn parse_statement(&mut self) -> ParserResult<Spanned<Statement>> {
         match self.peek() {
             Some(Spanned {
                 v: Token::Keyword(Keyword::Return),
@@ -164,9 +166,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// return Optional[Expression];
-    /// NOTE: For now we assume that the return value is not void
-    fn parse_return(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+    fn parse_return(&mut self) -> ParserResult<Spanned<Statement>> {
         let begin = self.next().unwrap();
         let expr = self.parse_expression()?;
         let end = self.expect_semicolon()?;
@@ -178,9 +178,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// if [expr] { ... }
-    /// NOTE: The `expr` has to be a boolean
-    fn parse_if(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+    fn parse_if(&mut self) -> ParserResult<Spanned<Statement>> {
         let begin = self.next().unwrap();
         let cond = self.parse_expression()?;
         let (body, end) = self.parse_block()?;
@@ -192,9 +190,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// while [expr] { ... }
-    /// NOTE: The `expr` has to be a boolean
-    fn parse_while(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+    fn parse_while(&mut self) -> ParserResult<Spanned<Statement>> {
         let begin = self.next().unwrap();
         let cond = self.parse_expression()?;
         let (body, end) = self.parse_block()?;
@@ -206,8 +202,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// let [name]: Optional[type_name] = [expr];
-    fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<Error>> {
+    fn parse_let(&mut self) -> ParserResult<Spanned<Statement>> {
         let begin = self.next().unwrap();
         let name = self.expect_name()?.v;
         self.expect_token(Token::Colon)?;
@@ -232,12 +227,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// [name] = [expr];
-    /// NOTE: `expr` has to be the same type as the previous value of the variable
     fn parse_assign(
         &mut self,
         begin_token: &Spanned<String>,
-    ) -> Result<Spanned<Statement>, Spanned<Error>> {
+    ) -> ParserResult<Spanned<Statement>> {
         let name = begin_token.v.clone();
         let value = self.parse_expression()?;
         let end = self.expect_semicolon()?;
@@ -249,11 +242,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// [func_name]([name]*);
     fn parse_call(
         &mut self,
         begin_token: &Spanned<String>,
-    ) -> Result<Spanned<Statement>, Spanned<Error>> {
+    ) -> ParserResult<Spanned<Statement>> {
         let name = begin_token.v.clone();
         let mut args = vec![];
         while self
@@ -289,8 +281,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// extern func [name](([name] [type])*) [ret];
-    fn parse_extern(&mut self) -> Result<Spanned<Function>, Spanned<Error>> {
+    fn parse_extern(&mut self) -> ParserResult<Spanned<Function>> {
         let begin = self.expect_keyword(Keyword::Extern)?;
         self.expect_keyword(Keyword::Func)?;
         let identifier = self.expect_name()?;
@@ -335,25 +326,25 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_expression(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
+    fn parse_expression(&mut self) -> ParserResult<Spanned<Expression>> {
         self.parse_cmp()
     }
 
-    fn parse_cmp(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
+    fn parse_cmp(&mut self) -> ParserResult<Spanned<Expression>> {
         self.parse_base_binary_expression(
             |t| matches!(t.v, Token::Operator(Operator::Less | Operator::More)),
             Parser::parse_term,
         )
     }
 
-    fn parse_term(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
+    fn parse_term(&mut self) -> ParserResult<Spanned<Expression>> {
         self.parse_base_binary_expression(
             |t| matches!(t.v, Token::Operator(Operator::Plus | Operator::Minus)),
             Parser::parse_factor,
         )
     }
 
-    fn parse_factor(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
+    fn parse_factor(&mut self) -> ParserResult<Spanned<Expression>> {
         self.parse_base_binary_expression(
             |t| {
                 matches!(
@@ -365,7 +356,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_unary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
+    fn parse_unary(&mut self) -> ParserResult<Spanned<Expression>> {
         if let Some(Spanned {
             v: Token::Operator(op @ (Operator::Not | Operator::Minus)),
             offset,
@@ -387,7 +378,7 @@ impl<'a> Parser<'a> {
         self.parse_primary()
     }
 
-    fn parse_primary(&mut self) -> Result<Spanned<Expression>, Spanned<Error>> {
+    fn parse_primary(&mut self) -> ParserResult<Spanned<Expression>> {
         match self.next() {
             Some(Spanned {
                 offset,
@@ -526,7 +517,7 @@ impl<'a> Parser<'a> {
                 self.expect_token(Token::Comma)?;
                 let value = self.parse_expression()?;
                 let end = self.expect_token(Token::CloseParen)?;
-                Ok(Spanned { offset: offset, len: end.offset - offset, line_beginning, v: Expression::Cast { value: Box::new(value), to: t_name.v } }) 
+                Ok(Spanned { offset, len: end.offset - offset, line_beginning, v: Expression::Cast { value: Box::new(value), to: t_name.v } }) 
             }
             None => Err(self.spanned_error_from_last_tk(Error::ExpectedExpression)),
             Some(_) => Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
@@ -537,8 +528,8 @@ impl<'a> Parser<'a> {
     fn parse_base_binary_expression(
         &mut self,
         predicate: fn(Spanned<Token>) -> bool,
-        lower_precedence_parser: fn(&mut Parser<'a>) -> Result<Spanned<Expression>, Spanned<Error>>,
-    ) -> Result<Spanned<Expression>, Spanned<Error>> {
+        lower_precedence_parser: fn(&mut Parser<'a>) -> ParserResult<Spanned<Expression>>,
+    ) -> ParserResult<Spanned<Expression>> {
         let mut l = lower_precedence_parser(self)?;
 
         while self.peek().is_some_and(predicate) {
@@ -568,7 +559,7 @@ impl<'a> Parser<'a> {
         Ok(l)
     }
 
-    fn expect_token(&mut self, t: Token) -> Result<Spanned<Token>, Spanned<Error>> {
+    fn expect_token(&mut self, t: Token) -> ParserResult<Spanned<Token>> {
         match self.peek() {
             Some(Spanned {
                 offset,
@@ -595,11 +586,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expect_keyword(&mut self, k: Keyword) -> Result<Spanned<Token>, Spanned<Error>> {
+    fn expect_keyword(&mut self, k: Keyword) -> ParserResult<Spanned<Token>> {
         self.expect_token(Token::Keyword(k))
     }
 
-    fn expect_name(&mut self) -> Result<Spanned<String>, Spanned<Error>> {
+    fn expect_name(&mut self) -> ParserResult<Spanned<String>> {
         match self.peek() {
             Some(Spanned {
                 offset,
@@ -626,7 +617,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expect_semicolon(&mut self) -> Result<Spanned<Token>, Spanned<Error>> {
+    fn expect_semicolon(&mut self) -> ParserResult<Spanned<Token>> {
         self.expect_token(Token::Semicolon)
     }
 

@@ -1,4 +1,4 @@
-use inkwell::types::{AnyTypeEnum, IntType};
+use inkwell::types::IntType;
 
 use crate::ir;
 
@@ -25,9 +25,9 @@ impl<'a> Codegen<'a> {
 
         fn ir_type_to_inkwell_type<'a>(ctx: &'a inkwell::context::Context, t: &ir::Type) -> IntType<'a> {
             match t {
-                ir::Type::U64 => ctx.i64_type().into(),
-                ir::Type::Bool => ctx.bool_type().into(),
-                ir::Type::Char => ctx.i8_type().into(),
+                ir::Type::U64 => ctx.i64_type(),
+                ir::Type::Bool => ctx.bool_type(),
+                ir::Type::Char => ctx.i8_type(),
                 ir::Type::Void => todo!("i dont know what to do here"),
             }
         }
@@ -306,7 +306,7 @@ pub fn generate_code(module: ir::Module, no_ext: &str) {
             &triple,
             "generic",
             "",
-            inkwell::OptimizationLevel::None,
+            inkwell::OptimizationLevel::Aggressive,
             inkwell::targets::RelocMode::Default,
             inkwell::targets::CodeModel::Default,
         )

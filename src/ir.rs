@@ -9,7 +9,7 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn from_ast<'a>(ast_module: parser::Module) -> Result<Self, Spanned<Error>> {
+    pub fn from_ast(ast_module: parser::Module) -> Result<Self, Spanned<Error>> {
         let mut s = Self { functions: vec![] };
         let mut func_types = HashMap::new();
         for f in ast_module.funcs() {
@@ -47,10 +47,6 @@ impl Module {
             external
         });
         self.functions.last_mut().unwrap()
-    }
-
-    fn get_function_mut(&mut self, name: &str) -> Option<&mut Function> {
-        self.functions.iter_mut().find(|v| v.name.as_str() == name)
     }
 
     pub fn functions(&self) -> &[Function] {

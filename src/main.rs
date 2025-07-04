@@ -13,7 +13,7 @@ fn main() -> Result<(), ()> {
     let mut objects = vec![];
     let pre = std::time::Instant::now();
     for name in &args.input {
-        let input = match std::fs::read_to_string(&name) {
+        let input = match std::fs::read_to_string(name) {
             Ok(i) => i,
             Err(e) => {
                 eprintln!(
@@ -25,13 +25,13 @@ fn main() -> Result<(), ()> {
         };
         println!("[{}]: {name}", "Build".purple());
 
-        let program = parse_source(&input, &name)?;
+        let program = parse_source(&input, name)?;
 
         let module = match ir::Module::from_ast(program) {
             Ok(m) => m,
             Err(e) => {
                 eprintln!("{}", e.v);
-                display_diagnostic_info(&input, &name, &e);
+                display_diagnostic_info(&input, name, &e);
                 return Err(());
             }
         };
@@ -40,7 +40,7 @@ fn main() -> Result<(), ()> {
             println!("{module}")
         }
 
-        let no_ext = std::path::Path::new(&name).file_stem().and_then(|s| s.to_str()).unwrap_or(&name);
+        let no_ext = std::path::Path::new(name).file_stem().and_then(|s| s.to_str()).unwrap_or(name);
 
         codegen::inkwell::generate_code(module, no_ext);
         objects.push(format!("{no_ext}.o"));
