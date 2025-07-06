@@ -610,10 +610,9 @@ impl<'a> Parser<'a> {
                 expected: Token::Identifier("name".to_string()),
                 got: None,
             })),
-            Some(Spanned { v, .. }) => Err(self.spanned_error_from_last_tk(Error::ExpectedToken {
-                expected: Token::Identifier("name".to_string()),
-                got: Some(v.clone()),
-            })),
+            Some(Spanned { offset, len, line_beginning, v }) => {
+                Err(Spanned { offset, len, line_beginning, v: Error::ExpectedToken { expected: Token::Identifier("any_name".to_string()), got: Some(v) } })
+            }
         }
     }
 
@@ -639,9 +638,14 @@ impl<'a> Parser<'a> {
     }
 
     fn next(&mut self) -> Option<Spanned<Token>> {
-        let tk = self.tokens.first().cloned();
-        self.tokens = &self.tokens[1..];
-        tk
+        match self.tokens.split_first() {
+            None => None,
+            Some((tk, rest)) => {
+                self.prev_token = tk;
+                self.tokens = rest;
+                Some(tk.clone())
+            }
+        }
     }
 }
 
@@ -757,6 +761,8 @@ pub enum Expression {
     }
 }
 
+
+#[derive(Debug)]
 pub enum Error {
     ExpectedToken { expected: Token, got: Option<Token> },
     UnexpectedToken,
