@@ -1,6 +1,6 @@
 mod codegen;
-mod ir;
 mod config;
+mod ir;
 mod lexer;
 mod logging;
 mod parser;
@@ -16,10 +16,7 @@ fn main() -> Result<(), ()> {
         let input = match std::fs::read_to_string(name) {
             Ok(i) => i,
             Err(e) => {
-                eprintln!(
-                    "[{}]: Failed to read {name}: {e}",
-                    "Error".red(),
-                );
+                eprintln!("[{}]: Failed to read {name}: {e}", "Error".red(),);
                 return Err(());
             }
         };
@@ -40,15 +37,23 @@ fn main() -> Result<(), ()> {
             println!("{module}")
         }
 
-        let no_ext = std::path::Path::new(name).file_stem().and_then(|s| s.to_str()).unwrap_or(name);
+        let no_ext = std::path::Path::new(name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(name);
 
         codegen::inkwell::generate_code(module, no_ext);
         objects.push(format!("{no_ext}.o"));
     }
 
-    let out = std::process::Command::new("clang").args(&objects).arg("-o").arg(&args.output).output().map_err(|e| {
-        println!("[{}]: Failed to execute clang: {e}", "Error".red());
-    })?;
+    let out = std::process::Command::new("clang")
+        .args(&objects)
+        .arg("-o")
+        .arg(&args.output)
+        .output()
+        .map_err(|e| {
+            println!("[{}]: Failed to execute clang: {e}", "Error".red());
+        })?;
     if !out.status.success() {
         eprintln!("[{}]: Linking failed", "Error".red());
         eprintln!("{}", String::from_utf8_lossy(&out.stderr));
@@ -93,7 +98,11 @@ fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
 }
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
-    let line_count = input[..e.line_beginning].chars().filter(|&c| c == '\n').count() + 1;
+    let line_count = input[..e.line_beginning]
+        .chars()
+        .filter(|&c| c == '\n')
+        .count()
+        + 1;
     println!("./{}:{}:{}", input_name, line_count, {
         input[e.line_beginning..e.offset].chars().count() + 1
     });
