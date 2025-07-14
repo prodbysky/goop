@@ -148,6 +148,7 @@ fn get_value<'a>(ctx: &'a gccjit::Context, f: &'a gccjit::Function, temps: &'a [
             ctx.new_rvalue_from_long(t, *v as i64)
         }
         ir::Value::Temp { t: _, i } => {
+            // the function arguments come first in the temporaries order
             if *i < f.get_param_count() {
                 f.get_param(*i as i32).to_rvalue()
             } else {
