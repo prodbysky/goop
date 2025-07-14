@@ -56,7 +56,9 @@ fn main() -> Result<(), ()> {
         .wait()
         .unwrap();
 
-    objects.iter().for_each(|o| std::fs::remove_file(o).unwrap());
+    objects
+        .iter()
+        .for_each(|o| std::fs::remove_file(o).unwrap());
 
     println!(
         "[{}]:  Compilation took: {:.2?}",
