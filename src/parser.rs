@@ -1,11 +1,10 @@
+use crate::Spanned;
 use crate::lexer::{Keyword, Operator, Token};
 use crate::{ir, logging};
-use crate::Spanned;
 use colored::Colorize;
 
 type ParserResult<T> = Result<T, Spanned<Error>>;
 impl<'a> Parser<'a> {
-
     pub fn new(tokens: &'a [Spanned<Token>]) -> Self {
         Self {
             tokens,
@@ -25,13 +24,15 @@ impl<'a> Parser<'a> {
 
     fn parse_top_level(&mut self) -> ParserResult<Spanned<Function>> {
         match self.peek() {
-            Some(Spanned { v: Token::Keyword(Keyword::Func), .. }) => {
-                self.parse_function()
-            }
-            Some(Spanned { v: Token::Keyword(Keyword::Extern), .. }) => {
-                self.parse_extern()
-            }
-            _ => todo!()
+            Some(Spanned {
+                v: Token::Keyword(Keyword::Func),
+                ..
+            }) => self.parse_function(),
+            Some(Spanned {
+                v: Token::Keyword(Keyword::Extern),
+                ..
+            }) => self.parse_extern(),
+            _ => todo!(),
         }
     }
 
@@ -49,8 +50,7 @@ impl<'a> Parser<'a> {
             match self.peek() {
                 None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
                 Some(Spanned {
-                    v: Token::Comma,
-                    ..
+                    v: Token::Comma, ..
                 }) => self.next(),
                 Some(Spanned {
                     v: Token::CloseParen,
@@ -74,7 +74,7 @@ impl<'a> Parser<'a> {
                 name: identifier.v,
                 body: Some(body),
                 ret_type: return_type.v,
-                args
+                args,
             },
         })
     }
@@ -168,13 +168,22 @@ impl<'a> Parser<'a> {
 
     fn parse_return(&mut self) -> ParserResult<Spanned<Statement>> {
         let begin = self.next().unwrap();
+        if self.peek().is_some_and(|t| t.v == Token::Semicolon) {
+            let end = self.next().unwrap();
+            return Ok(Spanned {
+                offset: begin.offset,
+                len: end.offset - begin.offset,
+                line_beginning: begin.line_beginning,
+                v: Statement::Return(None),
+            });
+        }
         let expr = self.parse_expression()?;
         let end = self.expect_semicolon()?;
         Ok(Spanned {
             offset: begin.offset,
             len: end.offset - begin.offset,
             line_beginning: begin.line_beginning,
-            v: Statement::Return (expr),
+            v: Statement::Return(Some(expr)),
         })
     }
 
@@ -227,10 +236,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_assign(
-        &mut self,
-        begin_token: &Spanned<String>,
-    ) -> ParserResult<Spanned<Statement>> {
+    fn parse_assign(&mut self, begin_token: &Spanned<String>) -> ParserResult<Spanned<Statement>> {
         let name = begin_token.v.clone();
         let value = self.parse_expression()?;
         let end = self.expect_semicolon()?;
@@ -242,23 +248,16 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_call(
-        &mut self,
-        begin_token: &Spanned<String>,
-    ) -> ParserResult<Spanned<Statement>> {
+    fn parse_call(&mut self, begin_token: &Spanned<String>) -> ParserResult<Spanned<Statement>> {
         let name = begin_token.v.clone();
         let mut args = vec![];
-        while self
-            .peek()
-            .is_some_and(|t| t.v != Token::CloseParen)
-        {
+        while self.peek().is_some_and(|t| t.v != Token::CloseParen) {
             let expr = self.parse_expression()?;
             args.push(expr);
             match self.peek() {
                 None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
                 Some(Spanned {
-                    v: Token::Comma,
-                    ..
+                    v: Token::Comma, ..
                 }) => self.next(),
                 Some(Spanned {
                     v: Token::CloseParen,
@@ -296,8 +295,7 @@ impl<'a> Parser<'a> {
             match self.peek() {
                 None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
                 Some(Spanned {
-                    v: Token::Comma,
-                    ..
+                    v: Token::Comma, ..
                 }) => self.next(),
                 Some(Spanned {
                     v: Token::CloseParen,
@@ -321,7 +319,7 @@ impl<'a> Parser<'a> {
                 name: identifier.v,
                 body: None,
                 ret_type: return_type.v,
-                args
+                args,
             },
         })
     }
@@ -511,13 +509,26 @@ impl<'a> Parser<'a> {
 
                 Ok(expr)
             }
-            Some(Spanned { offset, line_beginning, v: Token::Keyword(Keyword::Cast), .. }) => {
+            Some(Spanned {
+                offset,
+                line_beginning,
+                v: Token::Keyword(Keyword::Cast),
+                ..
+            }) => {
                 self.expect_token(Token::OpenParen)?;
                 let t_name = self.expect_name()?;
                 self.expect_token(Token::Comma)?;
                 let value = self.parse_expression()?;
                 let end = self.expect_token(Token::CloseParen)?;
-                Ok(Spanned { offset, len: end.offset - offset, line_beginning, v: Expression::Cast { value: Box::new(value), to: t_name.v } }) 
+                Ok(Spanned {
+                    offset,
+                    len: end.offset - offset,
+                    line_beginning,
+                    v: Expression::Cast {
+                        value: Box::new(value),
+                        to: t_name.v,
+                    },
+                })
             }
             None => Err(self.spanned_error_from_last_tk(Error::ExpectedExpression)),
             Some(_) => Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
@@ -610,9 +621,20 @@ impl<'a> Parser<'a> {
                 expected: Token::Identifier("name".to_string()),
                 got: None,
             })),
-            Some(Spanned { offset, len, line_beginning, v }) => {
-                Err(Spanned { offset, len, line_beginning, v: Error::ExpectedToken { expected: Token::Identifier("any_name".to_string()), got: Some(v) } })
-            }
+            Some(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v,
+            }) => Err(Spanned {
+                offset,
+                len,
+                line_beginning,
+                v: Error::ExpectedToken {
+                    expected: Token::Identifier("any_name".to_string()),
+                    got: Some(v),
+                },
+            }),
         }
     }
 
@@ -649,7 +671,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-
 #[derive(Debug)]
 pub struct Parser<'a> {
     tokens: &'a [Spanned<Token>],
@@ -682,22 +703,29 @@ pub struct Function {
 impl Function {
     pub fn get_type(&self) -> FunctionType {
         let name = &self.name;
-        let args = self.args.iter().map(|(name, type_name)| (name.clone(), ir::type_from_type_name(type_name))).collect();
+        let args = self
+            .args
+            .iter()
+            .map(|(name, type_name)| (name.clone(), ir::type_from_type_name(type_name)))
+            .collect();
         let ret = ir::type_from_type_name(&self.ret_type);
-        FunctionType { name: name.to_string(), args, ret }
+        FunctionType {
+            name: name.to_string(),
+            args,
+            ret,
+        }
     }
     pub fn body(&self) -> Option<&[Spanned<Statement>]> {
         self.body.as_deref()
     }
 }
 
-
 /// Type used in the IR generation
 #[derive(Debug, Clone)]
 pub struct FunctionType {
     pub name: String,
     pub args: Vec<(String, ir::Type)>,
-    pub ret: ir::Type
+    pub ret: ir::Type,
 }
 
 impl std::fmt::Display for FunctionType {
@@ -712,7 +740,7 @@ impl std::fmt::Display for FunctionType {
 
 #[derive(Debug)]
 pub enum Statement {
-    Return(Spanned<Expression>),
+    Return(Option<Spanned<Expression>>),
     If {
         cond: Spanned<Expression>,
         body: Vec<Spanned<Statement>>,
@@ -732,7 +760,7 @@ pub enum Statement {
     },
     FuncCall {
         name: String,
-        args: Vec<Spanned<Expression>>
+        args: Vec<Spanned<Expression>>,
     },
 }
 
@@ -757,10 +785,9 @@ pub enum Expression {
     },
     Cast {
         value: Box<Spanned<Expression>>,
-        to: String
-    }
+        to: String,
+    },
 }
-
 
 #[derive(Debug)]
 pub enum Error {

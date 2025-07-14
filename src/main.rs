@@ -42,37 +42,27 @@ fn main() -> Result<(), ()> {
             .and_then(|s| s.to_str())
             .unwrap_or(name);
 
-        codegen::inkwell::generate_code(module, no_ext);
+        // generate object into this file
+        codegen::gccjit::generate_module(module, no_ext);
         objects.push(format!("{no_ext}.o"));
     }
 
-    let out = std::process::Command::new("clang")
-        .args(&objects)
+    std::process::Command::new("gcc")
         .arg("-o")
         .arg(&args.output)
-        .output()
-        .map_err(|e| {
-            println!("[{}]: Failed to execute clang: {e}", "Error".red());
-        })?;
-    if !out.status.success() {
-        eprintln!("[{}]: Linking failed", "Error".red());
-        eprintln!("{}", String::from_utf8_lossy(&out.stderr));
-        return Err(());
-    }
+        .args(&objects)
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+
+    objects.iter().for_each(|o| std::fs::remove_file(o).unwrap());
+
     println!(
         "[{}]:  Compilation took: {:.2?}",
         "Info".green(),
         pre.elapsed()
     );
-    for o in &objects {
-        match std::fs::remove_file(o) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("[{}]: Failed to remove file {o}: {e}", "Error".red())
-            }
-        };
-    }
-
     Ok(())
 }
 

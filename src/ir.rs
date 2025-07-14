@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{logging, parser, Spanned};
+use crate::{Spanned, logging, parser};
 use colored::Colorize;
 
 #[derive(Debug, Clone)]
@@ -24,7 +24,13 @@ impl Module {
             if let Some(b) = f.v.body() {
                 for arg in &f_type.args {
                     let index = func.alloc_temp(arg.1.clone());
-                    func.put_var(&arg.0, Value::Temp{t: arg.1.to_owned(), i: index});
+                    func.put_var(
+                        &arg.0,
+                        Value::Temp {
+                            t: arg.1.to_owned(),
+                            i: index,
+                        },
+                    );
                 }
                 for st in b {
                     func.add_statement(st, &func_types)?;
@@ -32,10 +38,15 @@ impl Module {
             }
         }
 
-       Ok(s)
+        Ok(s)
     }
 
-    fn add_function(&mut self, name: String, fn_type: parser::FunctionType, external: bool) -> &mut Function {
+    fn add_function(
+        &mut self,
+        name: String,
+        fn_type: parser::FunctionType,
+        external: bool,
+    ) -> &mut Function {
         self.functions.push(Function {
             name,
             body: vec![],
@@ -44,7 +55,7 @@ impl Module {
             max_labels: 0,
             vars: vec![HashMap::new()],
             args: fn_type.args,
-            external
+            external,
         });
         self.functions.last_mut().unwrap()
     }
@@ -84,7 +95,7 @@ pub struct Function {
     vars: Vec<HashMap<String, Value>>,
     max_labels: LabelIndex,
     args: Vec<(String, Type)>,
-    pub external: bool
+    pub external: bool,
 }
 
 impl Function {
@@ -105,7 +116,7 @@ impl Function {
         funcs: &HashMap<String, parser::FunctionType>,
     ) -> Result<(), Spanned<Error>> {
         match &s.v {
-            parser::Statement::Return(v) => {
+            parser::Statement::Return(Some(v)) => {
                 let v_ir = self.add_expr(v, funcs)?;
                 if *v_ir.get_type() != self.ret_type {
                     return Err(Spanned {
@@ -119,6 +130,12 @@ impl Function {
                     });
                 }
                 self.body.push(Instr::Return { v: Some(v_ir) });
+            }
+            parser::Statement::Return(None) => {
+                if Type::Void != self.ret_type {
+                    todo!();
+                }
+                self.body.push(Instr::Return { v: None });
             }
             parser::Statement::VarAssign { name, t, expr } => {
                 if self.get_var(name).is_some() {
@@ -290,28 +307,53 @@ impl Function {
         match &e.v {
             parser::Expression::Integer(i) => {
                 let place = self.alloc_temp(Type::U64);
-                self.body.push(Instr::Assign { index: place, v: Value::Const { t: Type::U64, v: *i } });
-                Ok(Value::Temp { t: Type::U64, i: place })
-            } 
+                self.body.push(Instr::Assign {
+                    index: place,
+                    v: Value::Const {
+                        t: Type::U64,
+                        v: *i,
+                    },
+                });
+                Ok(Value::Temp {
+                    t: Type::U64,
+                    i: place,
+                })
+            }
             parser::Expression::Char(c) => {
                 let place = self.alloc_temp(Type::Char);
-                self.body.push(Instr::Assign { index: place, v: Value::Const { t: Type::Char, v: *c as u64 } });
-                Ok(Value::Temp { t: Type::Char, i: place })
-            },
+                self.body.push(Instr::Assign {
+                    index: place,
+                    v: Value::Const {
+                        t: Type::Char,
+                        v: *c as u64,
+                    },
+                });
+                Ok(Value::Temp {
+                    t: Type::Char,
+                    i: place,
+                })
+            }
             parser::Expression::Bool(b) => {
                 let place = self.alloc_temp(Type::Bool);
-                self.body.push(Instr::Assign { index: place, v: Value::Const { t: Type::Bool, v: *b as u64 } });
-                Ok(Value::Temp { t: Type::Bool, i: place })
-            },
+                self.body.push(Instr::Assign {
+                    index: place,
+                    v: Value::Const {
+                        t: Type::Bool,
+                        v: *b as u64,
+                    },
+                });
+                Ok(Value::Temp {
+                    t: Type::Bool,
+                    i: place,
+                })
+            }
             parser::Expression::Identifier(id) => match self.get_var(id) {
-                None => {
-                    Err(Spanned {
-                        offset: e.offset,
-                        len: e.len,
-                        line_beginning: e.line_beginning,
-                        v: Error::UndefinedVariable,
-                    })
-                }
+                None => Err(Spanned {
+                    offset: e.offset,
+                    len: e.len,
+                    line_beginning: e.line_beginning,
+                    v: Error::UndefinedVariable,
+                }),
                 Some(v) => Ok(v.clone()),
             },
             parser::Expression::Binary { left, op, right } => {
@@ -428,8 +470,15 @@ impl Function {
                 let dest_type = type_from_type_name(&to);
                 let place = self.alloc_temp(dest_type.clone());
                 let v = self.add_expr(value, funcs)?;
-                self.body.push(Instr::Cast { v, into_type: dest_type.clone(), into_index: place });
-                Ok(Value::Temp { t: dest_type, i: place })
+                self.body.push(Instr::Cast {
+                    v,
+                    into_type: dest_type.clone(),
+                    into_index: place,
+                });
+                Ok(Value::Temp {
+                    t: dest_type,
+                    i: place,
+                })
             }
         }
     }
@@ -600,7 +649,7 @@ pub enum Instr {
         v: Value,
         into_type: Type,
         into_index: TempIndex,
-    }
+    },
 }
 
 impl std::fmt::Display for Instr {
@@ -633,7 +682,11 @@ impl std::fmt::Display for Instr {
             Self::Assign { index, v } => {
                 write!(f, "Temp[{index}] = {v:?}")
             }
-            Self::Jnz { cond, to, otherwise } => {
+            Self::Jnz {
+                cond,
+                to,
+                otherwise,
+            } => {
                 write!(f, "Jump if {cond:?} != 0 to {to}, otherwise {otherwise}")
             }
             Self::Jump(to) => {
@@ -648,7 +701,11 @@ impl std::fmt::Display for Instr {
             Self::Return { v } => {
                 write!(f, "Return {v:?}")
             }
-            Self::Cast { v, into_type, into_index } => {
+            Self::Cast {
+                v,
+                into_type,
+                into_index,
+            } => {
                 write!(f, "Temp[{into_index}] = Cast({v:?}, into {into_type:?})")
             }
         }
@@ -684,7 +741,7 @@ pub fn type_from_type_name(n: &str) -> Type {
         "char" => Type::Char,
         "bool" => Type::Bool,
         "void" => Type::Void,
-        _ => todo!()
+        _ => todo!(),
     }
 }
 
