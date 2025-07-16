@@ -12,10 +12,10 @@ of my projects just get slapped into `/dev/null`.
 ## Features
 - `if` statements and `while` loops
 - Functions that can take in arguments
-- aaand that's it :3
+- aaand that's it
 
 ## Backends supported
-- LLVM via `inkwell`
+- GCCJIT
 
 ## TODO
 - Other backends (maybe even generating our own assembly)
