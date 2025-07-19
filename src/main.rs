@@ -90,14 +90,16 @@ fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
 }
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
-    let line_count = input[..e.line_beginning]
-        .chars()
-        .filter(|&c| c == '\n')
-        .count()
-        + 1;
-    println!("./{}:{}:{}", input_name, line_count, {
-        input[e.line_beginning..e.offset].chars().count() + 1
-    });
+    let line_begin = input[0..e.begin()].rfind('\n').unwrap() + 1;
+    let line = &input[line_begin..&input[line_begin..].find('\n').unwrap() + line_begin];
+
+    println!(
+        "./{}:{}:{}",
+        input_name,
+        &input[0..e.begin()].chars().filter(|c| *c == '\n').count() + 1,
+        &input[line_begin..e.end()].chars().count()
+    );
+    println!("{}", line);
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
