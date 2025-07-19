@@ -126,15 +126,23 @@ impl<'a> Lexer<'a> {
                                 Span::new(self.offset, self.offset + 1),
                             ));
                         }
-                        Some('\\') => {
-                            match self.eat() {
-                                Some('n') => '\n',
-                                Some('t') => '\t',
-                                Some('\\') => '\\',
-                                Some('"') => '"',
-                                Some('\'') => '\'',
-                                Some(_) => return Err(Spanned::new(Error::UnknownEscapeChar, Span::new(self.offset, self.offset + 1))),
-                                None => return Err(Spanned::new(Error::MissingEscapeChar, Span::new(self.offset, self.offset + 1))),
+                        Some('\\') => match self.eat() {
+                            Some('n') => '\n',
+                            Some('t') => '\t',
+                            Some('\\') => '\\',
+                            Some('"') => '"',
+                            Some('\'') => '\'',
+                            Some(_) => {
+                                return Err(Spanned::new(
+                                    Error::UnknownEscapeChar,
+                                    Span::new(self.offset, self.offset + 1),
+                                ));
+                            }
+                            None => {
+                                return Err(Spanned::new(
+                                    Error::MissingEscapeChar,
+                                    Span::new(self.offset, self.offset + 1),
+                                ));
                             }
                         },
                         Some(other) => *other,
@@ -143,8 +151,11 @@ impl<'a> Lexer<'a> {
                     let result = match self.eat() {
                         Some('\'') => {
                             Ok(Spanned::new(Token::Char(c), Span::new(begin, self.offset)))
-                        },
-                        Some(_) | None => Err(Spanned::new(Error::UnterminatedCharLiteral, Span::new(self.offset, self.offset + 1))),
+                        }
+                        Some(_) | None => Err(Spanned::new(
+                            Error::UnterminatedCharLiteral,
+                            Span::new(self.offset, self.offset + 1),
+                        )),
                     };
                     tokens.push(result?);
                 }
