@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Spanned, logging, parser};
+use crate::{Span, Spanned, logging, parser};
 use colored::Colorize;
 
 #[derive(Debug, Clone)]
@@ -119,15 +119,13 @@ impl Function {
             parser::Statement::Return(Some(v)) => {
                 let v_ir = self.add_expr(v, funcs)?;
                 if *v_ir.get_type() != self.ret_type {
-                    return Err(Spanned {
-                        offset: v.offset,
-                        len: v.len,
-                        line_beginning: v.line_beginning,
-                        v: Error::MismatchedReturnType {
+                    return Err(Spanned::new(
+                        Error::MismatchedReturnType {
                             got: v_ir.get_type().clone(),
                             expect: self.ret_type.clone(),
                         },
-                    });
+                        Span::new(v.begin(), v.end()),
+                    ));
                 }
                 self.body.push(Instr::Return { v: Some(v_ir) });
             }
@@ -139,38 +137,32 @@ impl Function {
             }
             parser::Statement::VarAssign { name, t, expr } => {
                 if self.get_var(name).is_some() {
-                    return Err(Spanned {
-                        offset: s.offset,
-                        len: s.len,
-                        line_beginning: s.line_beginning,
-                        v: Error::VariableRedefinition,
-                    });
+                    return Err(Spanned::new(
+                        Error::VariableRedefinition,
+                        Span::new(s.begin(), s.end()),
+                    ));
                 }
                 let v = self.add_expr(expr, funcs)?;
                 if t.is_some() {
                     let t = t.clone().unwrap();
                     if v.get_type() != &type_from_type_name(&t) {
-                        return Err(Spanned {
-                            offset: s.offset,
-                            len: s.len,
-                            line_beginning: s.line_beginning,
-                            v: Error::UnexpectedType {
+                        return Err(Spanned::new(
+                            Error::UnexpectedType {
                                 got: v.get_type().clone(),
                                 expect: type_from_type_name(&t),
                             },
-                        });
+                            Span::new(s.begin(), s.end()),
+                        ));
                     }
                 }
                 self.put_var(name, v);
             }
             parser::Statement::VarReassign { name, expr } => {
                 if self.get_var(name).is_none() {
-                    return Err(Spanned {
-                        offset: s.offset,
-                        len: s.len,
-                        line_beginning: s.line_beginning,
-                        v: Error::UndefinedVariableRedefinition,
-                    });
+                    return Err(Spanned::new(
+                        Error::UndefinedVariableRedefinition,
+                        Span::new(s.begin(), s.end()),
+                    ));
                 }
                 let v = self.add_expr(expr, funcs)?;
                 let prev = match self.get_var(name).unwrap() {
@@ -183,12 +175,10 @@ impl Function {
                 self.push_scope();
                 let cond = self.add_expr(cond, funcs)?;
                 if cond.get_type() != &Type::Bool {
-                    return Err(Spanned {
-                        offset: s.offset,
-                        len: s.len,
-                        line_beginning: s.line_beginning,
-                        v: Error::NotBooleanCondition,
-                    });
+                    return Err(Spanned::new(
+                        Error::NotBooleanCondition,
+                        Span::new(s.begin(), s.end()),
+                    ));
                 }
                 let into = self.alloc_label();
                 let over = self.alloc_label();
@@ -229,27 +219,23 @@ impl Function {
 
                 let receiver = match funcs.get(name) {
                     None => {
-                        return Err(Spanned {
-                            offset: s.offset,
-                            len: s.len,
-                            line_beginning: s.line_beginning,
-                            v: Error::UndefinedFunction,
-                        });
+                        return Err(Spanned::new(
+                            Error::UndefinedFunction,
+                            Span::new(s.begin(), s.end()),
+                        ));
                     }
                     Some(r) => r,
                 };
 
                 if receiver.args.len() != args.len() {
-                    return Err(Spanned {
-                        offset: s.offset,
-                        len: s.len,
-                        line_beginning: s.line_beginning,
-                        v: Error::MismatchedArgumentCount {
+                    return Err(Spanned::new(
+                        Error::MismatchedArgumentCount {
                             callee_type: receiver.clone(),
                             expect: receiver.args.len(),
                             got: args.len(),
                         },
-                    });
+                        Span::new(s.begin(), s.end()),
+                    ));
                 }
 
                 for arg in args {
@@ -258,16 +244,14 @@ impl Function {
 
                 for i in 0..args.len() {
                     if args_into[i].get_type() != &receiver.args[i].1 {
-                        return Err(Spanned {
-                            offset: s.offset,
-                            len: s.len,
-                            line_beginning: s.line_beginning,
-                            v: Error::MismatchedArgumentTypes {
+                        return Err(Spanned::new(
+                            Error::MismatchedArgumentTypes {
                                 callee_type: receiver.clone(),
                                 expect: receiver.args.len(),
                                 got: args.len(),
                             },
-                        });
+                            Span::new(s.begin(), s.end()),
+                        ));
                     }
                 }
                 self.body.push(Instr::Call {
@@ -348,12 +332,10 @@ impl Function {
                 })
             }
             parser::Expression::Identifier(id) => match self.get_var(id) {
-                None => Err(Spanned {
-                    offset: e.offset,
-                    len: e.len,
-                    line_beginning: e.line_beginning,
-                    v: Error::UndefinedVariable,
-                }),
+                None => Err(Spanned::new(
+                    Error::UndefinedFunction,
+                    Span::new(e.begin(), e.end()),
+                )),
                 Some(v) => Ok(v.clone()),
             },
             parser::Expression::Binary { left, op, right } => {
@@ -413,26 +395,22 @@ impl Function {
             parser::Expression::FuncCall { name, args } => {
                 let receiver = match funcs.get(name) {
                     None => {
-                        return Err(Spanned {
-                            offset: e.offset,
-                            len: e.len,
-                            line_beginning: e.line_beginning,
-                            v: Error::UndefinedFunction,
-                        });
+                        return Err(Spanned::new(
+                            Error::UndefinedFunction,
+                            Span::new(e.begin(), e.end()),
+                        ));
                     }
                     Some(f_type) => f_type,
                 };
                 if args.len() != receiver.args.len() {
-                    return Err(Spanned {
-                        offset: e.offset,
-                        len: e.len,
-                        line_beginning: e.line_beginning,
-                        v: Error::MismatchedArgumentCount {
+                    return Err(Spanned::new(
+                        Error::MismatchedArgumentCount {
                             callee_type: receiver.clone(),
                             expect: receiver.args.len(),
                             got: args.len(),
                         },
-                    });
+                        Span::new(e.begin(), e.end()),
+                    ));
                 }
                 let mut send_load = vec![];
                 for arg in args {
@@ -440,16 +418,14 @@ impl Function {
                 }
                 for i in 0..args.len() {
                     if send_load[i].get_type() != &receiver.args[i].1 {
-                        return Err(Spanned {
-                            offset: e.offset,
-                            len: e.len,
-                            line_beginning: e.line_beginning,
-                            v: Error::MismatchedArgumentTypes {
+                        return Err(Spanned::new(
+                            Error::MismatchedArgumentTypes {
                                 callee_type: receiver.clone(),
                                 expect: receiver.args.len(),
                                 got: args.len(),
                             },
-                        });
+                            Span::new(e.begin(), e.end()),
+                        ));
                     }
                 }
 
