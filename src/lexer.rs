@@ -123,10 +123,12 @@ impl<'a> Lexer<'a> {
                         None => {
                             return Err(Spanned::new(
                                 Error::UnterminatedCharLiteral,
-                                Span::new(self.offset, self.offset + 1),
+                                Span::new(begin, self.offset),
                             ));
                         }
-                        Some('\\') => match self.eat() {
+                        Some('\\') => {
+                            let esc_begin = self.offset - 1;
+                            match self.eat() {
                             Some('n') => '\n',
                             Some('t') => '\t',
                             Some('\\') => '\\',
@@ -135,16 +137,16 @@ impl<'a> Lexer<'a> {
                             Some(_) => {
                                 return Err(Spanned::new(
                                     Error::UnknownEscapeChar,
-                                    Span::new(self.offset, self.offset + 1),
+                                    Span::new(esc_begin, self.offset),
                                 ));
                             }
                             None => {
                                 return Err(Spanned::new(
                                     Error::MissingEscapeChar,
-                                    Span::new(self.offset, self.offset + 1),
+                                    Span::new(esc_begin, self.offset),
                                 ));
                             }
-                        },
+                        }},
                         Some(other) => *other,
                     };
 
@@ -154,7 +156,7 @@ impl<'a> Lexer<'a> {
                         }
                         Some(_) | None => Err(Spanned::new(
                             Error::UnterminatedCharLiteral,
-                            Span::new(self.offset, self.offset + 1),
+                            Span::new(begin, self.offset),
                         )),
                     };
                     tokens.push(result?);
@@ -219,7 +221,7 @@ impl<'a> Lexer<'a> {
             self.eat();
             return Err(Spanned::new(
                 Error::InvalidNumberLiteral,
-                Span::new(begin, self.offset - 1 - begin),
+                Span::new(begin, self.offset),
             ));
         }
         let number = self.input[begin..self.offset]
