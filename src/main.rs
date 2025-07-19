@@ -90,14 +90,18 @@ fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
 }
 
 fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
-    let line_begin = input[0..e.begin()].rfind('\n').unwrap() + 1;
-    let line = &input[line_begin..&input[line_begin..].find('\n').unwrap() + line_begin];
+    let line_begin = input[0..e.begin()].rfind('\n').map(|i| i + 1).unwrap_or(0);
+    let line_end = input[line_begin..]
+        .find('\n')
+        .map(|i| i + line_begin)
+        .unwrap_or(input.len());
+    let line = &input[line_begin..line_end];
 
     println!(
         "./{}:{}:{}",
         input_name,
         &input[0..e.begin()].chars().filter(|c| *c == '\n').count() + 1,
-        &input[line_begin..e.end()].chars().count()
+        &input[line_begin..e.begin()].chars().count() + 1
     );
     println!("{}", line);
 }
@@ -110,7 +114,7 @@ pub struct Span {
 
 impl Span {
     pub fn len(&self) -> usize {
-        assert!(self.begin < self.end);
+        assert!(self.begin <= self.end);
         self.end - self.begin
     }
 
