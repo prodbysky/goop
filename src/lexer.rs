@@ -1,5 +1,5 @@
-use crate::Spanned;
 use crate::logging;
+use crate::{Span, Spanned};
 use colored::Colorize;
 
 #[derive(Debug)]
@@ -76,20 +76,16 @@ impl<'a> Lexer<'a> {
 
             match self.input[self.offset] {
                 c if c.is_ascii_digit() => {
-                    tokens.push(self.lex_number().map(|t| Spanned {
-                        v: Token::Integer(t.v),
-                        offset: t.offset,
-                        len: t.len,
-                        line_beginning: t.line_beginning,
-                    })?);
+                    tokens.push(
+                        self.lex_number()
+                            .map(|op| op.map(|op| Token::Integer(op.v)))?,
+                    );
                 }
                 c if "+-*/<>%!".contains(c) => {
-                    tokens.push(self.lex_operator().map(|t| Spanned {
-                        v: Token::Operator(t.v),
-                        offset: t.offset,
-                        len: t.len,
-                        line_beginning: t.line_beginning,
-                    })?);
+                    tokens.push(
+                        self.lex_operator()
+                            .map(|op| op.map(|op| Token::Operator(op.v)))?,
+                    );
                 }
                 '(' => {
                     tokens.push(self.lex_and_skip_single_char(Token::OpenParen)?);
@@ -115,23 +111,17 @@ impl<'a> Lexer<'a> {
                 ',' => {
                     tokens.push(self.lex_and_skip_single_char(Token::Comma)?);
                 }
+                // TODO: Proper char lexing omg
                 '\'' => {
                     let begin = self.offset;
-                    let begin_line = self.line_beginning;
                     self.eat().unwrap();
                     let c = *self.eat().unwrap();
                     let end_c = *self.eat().unwrap();
                     assert!(end_c == '\'');
-                    tokens.push(Spanned {
-                        offset: begin,
-                        len: 3,
-                        line_beginning: begin_line,
-                        v: Token::Char(c),
-                    });
+                    tokens.push(Spanned::new(Token::Char(c), Span::new(begin, begin + 3)));
                 }
                 'a'..='z' | 'A'..='Z' => {
                     let begin = self.offset;
-                    let begin_line = self.line_beginning;
                     while self
                         .current()
                         .is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_')
@@ -141,76 +131,53 @@ impl<'a> Lexer<'a> {
                     let end = self.offset;
                     let slice: String = self.input[begin..end].iter().collect();
                     match slice.as_str() {
-                        "return" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Return),
-                        }),
-                        "let" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Let),
-                        }),
-                        "true" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::True),
-                        }),
-                        "false" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::False),
-                        }),
-                        "if" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::If),
-                        }),
-                        "while" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::While),
-                        }),
-                        "func" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Func),
-                        }),
-                        "extern" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Extern),
-                        }),
-                        "cast" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Cast),
-                        }),
-                        _ => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Identifier(slice),
-                        }),
+                        "return" => tokens.push(Spanned::new(
+                            Token::Keyword(Keyword::Return),
+                            Span::new(begin, end),
+                        )),
+                        "let" => tokens.push(Spanned::new(
+                            Token::Keyword(Keyword::Let),
+                            Span::new(begin, end),
+                        )),
+                        "true" => tokens.push(Spanned::new(
+                            Token::Keyword(Keyword::True),
+                            Span::new(begin, end),
+                        )),
+                        "false" => tokens.push(Spanned::new(
+                            Token::Keyword(Keyword::False),
+                            Span::new(begin, end),
+                        )),
+                        "if" => tokens.push(Spanned::new(
+                            Token::Keyword(Keyword::If),
+                            Span::new(begin, end),
+                        )),
+                        "while" => tokens.push(Spanned::new(
+                            Token::Keyword(Keyword::While),
+                            Span::new(begin, end),
+                        )),
+                        "func" => tokens.push(Spanned::new(
+                            Token::Keyword(Keyword::Func),
+                            Span::new(begin, end),
+                        )),
+                        "extern" => tokens.push(Spanned::new(
+                            Token::Keyword(Keyword::Extern),
+                            Span::new(begin, end),
+                        )),
+                        "cast" => tokens.push(Spanned::new(
+                            Token::Keyword(Keyword::Cast),
+                            Span::new(begin, end),
+                        )),
+                        _ => tokens.push(Spanned::new(
+                            Token::Identifier(slice),
+                            Span::new(begin, end),
+                        )),
                     }
                 }
                 c => {
-                    self.eat();
-                    return Err(Spanned {
-                        offset: self.offset - 1,
-                        line_beginning: self.line_beginning,
-                        len: 1,
-                        v: Error::UnexpectedChar(c),
-                    });
+                    return Err(Spanned::new(
+                        Error::UnexpectedChar(c),
+                        Span::new(self.offset, self.offset + 1),
+                    ));
                 }
             };
         }
@@ -237,35 +204,22 @@ impl<'a> Lexer<'a> {
         }
         if self.current().is_some_and(|c| c.is_alphabetic()) {
             self.eat();
-            return Err(Spanned {
-                offset: begin,
-                len: self.offset - 1 - begin,
-                line_beginning: self.line_beginning,
-                v: Error::InvalidNumberLiteral,
-            });
+            return Err(Spanned::new(
+                Error::InvalidNumberLiteral,
+                Span::new(begin, self.offset - 1 - begin),
+            ));
         }
         let number = self.input[begin..self.offset]
             .iter()
             .collect::<String>()
             .parse()
             .unwrap();
-        Ok(Spanned {
-            offset: begin,
-            len: self.offset - begin,
-            line_beginning: self.line_beginning,
-            v: number,
-        })
+        Ok(Spanned::new(number, Span::new(begin, self.offset)))
     }
 
     fn lex_and_skip_single_char<T>(&mut self, o: T) -> Result<Spanned<T>, Spanned<Error>> {
-        let prev_line_begin = self.line_beginning;
         self.eat().unwrap();
-        Ok(Spanned {
-            len: 1,
-            line_beginning: prev_line_begin,
-            offset: self.offset - 1,
-            v: o,
-        })
+        Ok(Spanned::new(o, Span::new(self.offset - 1, self.offset)))
     }
 
     fn lex_operator(&mut self) -> Result<Spanned<Operator>, Spanned<Error>> {
@@ -279,12 +233,10 @@ impl<'a> Lexer<'a> {
             '>' => self.lex_and_skip_single_char(Operator::More),
             '%' => self.lex_and_skip_single_char(Operator::Percent),
             '!' => self.lex_and_skip_single_char(Operator::Not),
-            c => Err(Spanned {
-                offset: self.offset,
-                len: 1,
-                line_beginning: self.line_beginning,
-                v: Error::UnexpectedChar(*c),
-            }),
+            c => Err(Spanned::new(
+                Error::UnexpectedChar(*c),
+                Span::new(self.offset, self.offset + 1),
+            )),
         }
     }
 
