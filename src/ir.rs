@@ -333,7 +333,7 @@ impl Function {
             }
             parser::Expression::Identifier(id) => match self.get_var(id) {
                 None => Err(Spanned::new(
-                    Error::UndefinedFunction,
+                    Error::UndefinedVariable,
                     Span::new(e.begin(), e.end()),
                 )),
                 Some(v) => Ok(v.clone()),
