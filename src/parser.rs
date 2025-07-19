@@ -1,5 +1,5 @@
-use crate::Spanned;
 use crate::lexer::{Keyword, Operator, Token};
+use crate::{Span, Spanned};
 use crate::{ir, logging};
 use colored::Colorize;
 
@@ -66,17 +66,15 @@ impl<'a> Parser<'a> {
         self.expect_token(Token::CloseParen)?;
         let return_type = self.expect_name()?;
         let (body, end) = self.parse_block()?;
-        Ok(Spanned {
-            offset: begin.offset,
-            len: end.offset - begin.offset,
-            line_beginning: begin.line_beginning,
-            v: Function {
+        Ok(Spanned::new(
+            Function {
                 name: identifier.v,
                 body: Some(body),
                 ret_type: return_type.v,
                 args,
             },
-        })
+            Span::new(begin.begin(), end.end()),
+        ))
     }
 
     fn parse_block(&mut self) -> ParserResult<(Vec<Spanned<Statement>>, Spanned<()>)> {
@@ -87,12 +85,7 @@ impl<'a> Parser<'a> {
             body.push(self.parse_statement()?);
         }
         let end = self.expect_token(Token::CloseCurly)?;
-        let end_span = Spanned {
-            v: (),
-            offset: end.offset,
-            line_beginning: end.line_beginning,
-            len: end.len,
-        };
+        let end_span = Spanned::new((), Span::new(end.begin(), end.end()));
         Ok((body, end_span))
     }
 
@@ -123,10 +116,8 @@ impl<'a> Parser<'a> {
                 ..
             }) => Err(self.spanned_error_from_last_tk(Error::BooleanExpressionAsStatement)),
             Some(Spanned {
+                s,
                 v: Token::Identifier(name),
-                offset,
-                len,
-                line_beginning,
             }) => {
                 self.next().unwrap();
                 match self.peek() {
@@ -134,24 +125,14 @@ impl<'a> Parser<'a> {
                         v: Token::Assign, ..
                     }) => {
                         self.next();
-                        self.parse_assign(&Spanned {
-                            offset,
-                            len,
-                            line_beginning,
-                            v: name,
-                        })
+                        self.parse_assign(&Spanned::new(name, s))
                     }
                     Some(Spanned {
                         v: Token::OpenParen,
                         ..
                     }) => {
                         self.next();
-                        self.parse_call(&Spanned {
-                            offset,
-                            len,
-                            line_beginning,
-                            v: name,
-                        })
+                        self.parse_call(&Spanned::new(name, s))
                     }
                     None => Err(self.spanned_error_from_last_tk(
                         Error::UnexpectedTokenAfterIdentifierInStatement { got: None },
@@ -170,45 +151,37 @@ impl<'a> Parser<'a> {
         let begin = self.next().unwrap();
         if self.peek().is_some_and(|t| t.v == Token::Semicolon) {
             let end = self.next().unwrap();
-            return Ok(Spanned {
-                offset: begin.offset,
-                len: end.offset - begin.offset,
-                line_beginning: begin.line_beginning,
-                v: Statement::Return(None),
-            });
+            return Ok(Spanned::new(
+                Statement::Return(None),
+                Span::new(begin.begin(), end.end()),
+            ));
         }
         let expr = self.parse_expression()?;
         let end = self.expect_semicolon()?;
-        Ok(Spanned {
-            offset: begin.offset,
-            len: end.offset - begin.offset,
-            line_beginning: begin.line_beginning,
-            v: Statement::Return(Some(expr)),
-        })
+        Ok(Spanned::new(
+            Statement::Return(Some(expr)),
+            Span::new(begin.begin(), end.end()),
+        ))
     }
 
     fn parse_if(&mut self) -> ParserResult<Spanned<Statement>> {
         let begin = self.next().unwrap();
         let cond = self.parse_expression()?;
         let (body, end) = self.parse_block()?;
-        Ok(Spanned {
-            offset: begin.offset,
-            len: end.offset - begin.offset,
-            line_beginning: begin.line_beginning,
-            v: Statement::If { cond, body },
-        })
+        Ok(Spanned::new(
+            Statement::If { cond, body },
+            Span::new(begin.begin(), end.end()),
+        ))
     }
 
     fn parse_while(&mut self) -> ParserResult<Spanned<Statement>> {
         let begin = self.next().unwrap();
         let cond = self.parse_expression()?;
         let (body, end) = self.parse_block()?;
-        Ok(Spanned {
-            offset: begin.offset,
-            len: end.offset - begin.offset,
-            line_beginning: begin.line_beginning,
-            v: Statement::While { cond, body },
-        })
+        Ok(Spanned::new(
+            Statement::While { cond, body },
+            Span::new(begin.begin(), end.end()),
+        ))
     }
 
     fn parse_let(&mut self) -> ParserResult<Spanned<Statement>> {
@@ -224,28 +197,24 @@ impl<'a> Parser<'a> {
         let value = self.parse_expression()?;
         let end = self.expect_semicolon()?;
 
-        Ok(Spanned {
-            offset: begin.offset,
-            len: end.offset - begin.offset,
-            line_beginning: begin.line_beginning,
-            v: Statement::VarAssign {
+        Ok(Spanned::new(
+            Statement::VarAssign {
                 name,
                 t: type_name,
                 expr: value,
             },
-        })
+            Span::new(begin.begin(), end.end()),
+        ))
     }
 
     fn parse_assign(&mut self, begin_token: &Spanned<String>) -> ParserResult<Spanned<Statement>> {
         let name = begin_token.v.clone();
         let value = self.parse_expression()?;
         let end = self.expect_semicolon()?;
-        Ok(Spanned {
-            offset: begin_token.offset,
-            len: end.offset - begin_token.offset,
-            line_beginning: begin_token.line_beginning,
-            v: Statement::VarReassign { name, expr: value },
-        })
+        Ok(Spanned::new(
+            Statement::VarReassign { name, expr: value },
+            Span::new(begin_token.begin(), end.end()),
+        ))
     }
 
     fn parse_call(&mut self, begin_token: &Spanned<String>) -> ParserResult<Spanned<Statement>> {
@@ -272,12 +241,10 @@ impl<'a> Parser<'a> {
         }
         self.expect_token(Token::CloseParen)?;
         let semicolon = self.expect_semicolon()?;
-        Ok(Spanned {
-            offset: begin_token.offset,
-            len: semicolon.offset - begin_token.offset,
-            line_beginning: begin_token.line_beginning,
-            v: Statement::FuncCall { name, args },
-        })
+        Ok(Spanned::new(
+            Statement::FuncCall { name, args },
+            Span::new(begin_token.begin(), semicolon.end()),
+        ))
     }
 
     fn parse_extern(&mut self) -> ParserResult<Spanned<Function>> {
@@ -311,17 +278,15 @@ impl<'a> Parser<'a> {
         self.expect_token(Token::CloseParen)?;
         let return_type = self.expect_name()?;
         let end = self.expect_semicolon()?;
-        Ok(Spanned {
-            offset: begin.offset,
-            len: end.offset - begin.offset,
-            line_beginning: begin.line_beginning,
-            v: Function {
+        Ok(Spanned::new(
+            Function {
                 name: identifier.v,
                 body: None,
-                ret_type: return_type.v,
                 args,
+                ret_type: return_type.v,
             },
-        })
+            Span::new(begin.begin(), end.end()),
+        ))
     }
 
     fn parse_expression(&mut self) -> ParserResult<Spanned<Expression>> {
@@ -357,21 +322,18 @@ impl<'a> Parser<'a> {
     fn parse_unary(&mut self) -> ParserResult<Spanned<Expression>> {
         if let Some(Spanned {
             v: Token::Operator(op @ (Operator::Not | Operator::Minus)),
-            offset,
-            line_beginning,
-            len: _,
+            s,
         }) = self.peek()
         {
             let right = self.parse_unary()?;
-            return Ok(Spanned {
-                offset,
-                len: right.offset - offset,
-                line_beginning,
-                v: Expression::Unary {
+            let span = Span::new(right.begin(), s.end);
+            return Ok(Spanned::new(
+                Expression::Unary {
                     op,
                     right: Box::new(right),
                 },
-            });
+                span,
+            ));
         }
         self.parse_primary()
     }
@@ -379,60 +341,28 @@ impl<'a> Parser<'a> {
     fn parse_primary(&mut self) -> ParserResult<Spanned<Expression>> {
         match self.next() {
             Some(Spanned {
-                offset,
-                len,
-                line_beginning,
+                s,
                 v: Token::Integer(n),
-            }) => Ok(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v: Expression::Integer(n),
-            }),
+            }) => Ok(Spanned::new(Expression::Integer(n), s)),
             Some(Spanned {
-                offset,
-                len,
-                line_beginning,
+                s,
                 v: Token::Char(n),
-            }) => Ok(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v: Expression::Char(n),
-            }),
+            }) => Ok(Spanned::new(Expression::Char(n), s)),
             Some(Spanned {
-                offset,
-                len,
-                line_beginning,
+                s,
                 v: Token::Keyword(Keyword::True),
-            }) => Ok(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v: Expression::Bool(true),
-            }),
+            }) => Ok(Spanned::new(Expression::Bool(true), s)),
             Some(Spanned {
-                offset,
-                len,
-                line_beginning,
+                s,
                 v: Token::Keyword(Keyword::False),
-            }) => Ok(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v: Expression::Bool(false),
-            }),
+            }) => Ok(Spanned::new(Expression::Bool(false), s)),
             Some(Spanned {
-                offset,
-                len,
-                line_beginning,
+                s,
                 v: Token::Identifier(ident),
             }) => match self.peek() {
                 Some(Spanned {
-                    offset,
-                    len: _,
-                    line_beginning,
                     v: Token::OpenParen,
+                    s,
                 }) => {
                     self.next();
                     let mut args = vec![];
@@ -458,22 +388,15 @@ impl<'a> Parser<'a> {
                         };
                     }
                     let end = self.expect_token(Token::CloseParen)?;
-                    Ok(Spanned {
-                        offset,
-                        len: end.offset - offset,
-                        line_beginning,
-                        v: Expression::FuncCall {
+                    Ok(Spanned::new(
+                        Expression::FuncCall {
                             name: ident.to_string(),
                             args,
                         },
-                    })
+                        Span::new(s.begin, end.end()),
+                    ))
                 }
-                None | Some(_) => Ok(Spanned {
-                    offset,
-                    len,
-                    line_beginning,
-                    v: Expression::Identifier(ident.to_string()),
-                }),
+                None | Some(_) => Ok(Spanned::new(Expression::Identifier(ident.to_string()), s)),
             },
             Some(Spanned {
                 v: Token::OpenParen,
@@ -492,26 +415,15 @@ impl<'a> Parser<'a> {
                     }) => {
                         self.next();
                     }
-                    Some(Spanned {
-                        offset,
-                        len,
-                        line_beginning,
-                        v: _,
-                    }) => {
-                        return Err(Spanned {
-                            offset,
-                            len,
-                            line_beginning,
-                            v: Error::UnbalancedParenthesis,
-                        });
+                    Some(Spanned { s, v: _ }) => {
+                        return Err(Spanned::new(Error::UnbalancedParenthesis, s));
                     }
                 };
 
                 Ok(expr)
             }
             Some(Spanned {
-                offset,
-                line_beginning,
+                s,
                 v: Token::Keyword(Keyword::Cast),
                 ..
             }) => {
@@ -520,15 +432,13 @@ impl<'a> Parser<'a> {
                 self.expect_token(Token::Comma)?;
                 let value = self.parse_expression()?;
                 let end = self.expect_token(Token::CloseParen)?;
-                Ok(Spanned {
-                    offset,
-                    len: end.offset - offset,
-                    line_beginning,
-                    v: Expression::Cast {
+                Ok(Spanned::new(
+                    Expression::Cast {
                         value: Box::new(value),
                         to: t_name.v,
                     },
-                })
+                    Span::new(s.begin, end.end()),
+                ))
             }
             None => Err(self.spanned_error_from_last_tk(Error::ExpectedExpression)),
             Some(_) => Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
@@ -554,17 +464,16 @@ impl<'a> Parser<'a> {
             };
             self.next();
             let right = lower_precedence_parser(self)?;
+            let span = Span::new(l.begin(), right.end());
 
-            l = Spanned {
-                offset: l.offset,
-                len: right.offset - l.offset,
-                line_beginning: l.line_beginning,
-                v: Expression::Binary {
+            l = Spanned::new(
+                Expression::Binary {
                     left: Box::new(l),
                     op,
                     right: Box::new(right),
                 },
-            };
+                span,
+            );
         }
 
         Ok(l)
@@ -572,19 +481,9 @@ impl<'a> Parser<'a> {
 
     fn expect_token(&mut self, t: Token) -> ParserResult<Spanned<Token>> {
         match self.peek() {
-            Some(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v,
-            }) if v == t => {
+            Some(Spanned { s, v }) if v == t => {
                 self.next();
-                Ok(Spanned {
-                    offset,
-                    len,
-                    line_beginning,
-                    v,
-                })
+                Ok(Spanned::new(v, s))
             }
             None => Err(self.spanned_error_from_last_tk(Error::ExpectedToken {
                 expected: t,
@@ -604,37 +503,23 @@ impl<'a> Parser<'a> {
     fn expect_name(&mut self) -> ParserResult<Spanned<String>> {
         match self.peek() {
             Some(Spanned {
-                offset,
-                len,
-                line_beginning,
+                s,
                 v: Token::Identifier(i),
             }) => {
                 self.next();
-                Ok(Spanned {
-                    offset,
-                    len,
-                    line_beginning,
-                    v: i.to_string(),
-                })
+                Ok(Spanned::new(i.to_string(), s))
             }
             None => Err(self.spanned_error_from_last_tk(Error::ExpectedToken {
                 expected: Token::Identifier("name".to_string()),
                 got: None,
             })),
-            Some(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v,
-            }) => Err(Spanned {
-                offset,
-                len,
-                line_beginning,
-                v: Error::ExpectedToken {
+            Some(Spanned { s, v }) => Err(Spanned::new(
+                Error::ExpectedToken {
                     expected: Token::Identifier("any_name".to_string()),
                     got: Some(v),
                 },
-            }),
+                s,
+            )),
         }
     }
 
@@ -647,12 +532,7 @@ impl<'a> Parser<'a> {
     }
 
     fn spanned_error_from_last_tk(&self, e: Error) -> Spanned<Error> {
-        Spanned {
-            offset: self.prev_token.offset,
-            len: self.prev_token.len,
-            line_beginning: self.prev_token.line_beginning,
-            v: e,
-        }
+        Spanned::new(e, Span::new(self.prev_token.s.begin, self.prev_token.s.end))
     }
 
     fn peek(&self) -> Option<Spanned<Token>> {

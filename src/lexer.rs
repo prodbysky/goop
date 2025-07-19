@@ -1,5 +1,5 @@
-use crate::Spanned;
 use crate::logging;
+use crate::{Span, Spanned};
 use colored::Colorize;
 
 #[derive(Debug)]
@@ -12,7 +12,10 @@ pub struct Lexer<'a> {
 #[derive(Debug, Clone)]
 pub enum Error {
     UnexpectedChar(char),
+    UnterminatedCharLiteral,
     InvalidNumberLiteral,
+    UnknownEscapeChar,
+    MissingEscapeChar,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,6 +70,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn lex(mut self) -> Result<Vec<Spanned<Token>>, Spanned<Error>> {
+        const OPERATOR_CHARS: &str = "+-*/<>%!";
         let mut tokens = vec![];
         while !self.finished() {
             self.skip_ws();
@@ -76,20 +80,16 @@ impl<'a> Lexer<'a> {
 
             match self.input[self.offset] {
                 c if c.is_ascii_digit() => {
-                    tokens.push(self.lex_number().map(|t| Spanned {
-                        v: Token::Integer(t.v),
-                        offset: t.offset,
-                        len: t.len,
-                        line_beginning: t.line_beginning,
-                    })?);
+                    tokens.push(
+                        self.lex_number()
+                            .map(|op| op.map(|op| Token::Integer(op.v)))?,
+                    );
                 }
-                c if "+-*/<>%!".contains(c) => {
-                    tokens.push(self.lex_operator().map(|t| Spanned {
-                        v: Token::Operator(t.v),
-                        offset: t.offset,
-                        len: t.len,
-                        line_beginning: t.line_beginning,
-                    })?);
+                c if OPERATOR_CHARS.contains(c) => {
+                    tokens.push(
+                        self.lex_operator()
+                            .map(|op| op.map(|op| Token::Operator(op.v)))?,
+                    );
                 }
                 '(' => {
                     tokens.push(self.lex_and_skip_single_char(Token::OpenParen)?);
@@ -115,106 +115,88 @@ impl<'a> Lexer<'a> {
                 ',' => {
                     tokens.push(self.lex_and_skip_single_char(Token::Comma)?);
                 }
+                // TODO: Proper char lexing omg
                 '\'' => {
                     let begin = self.offset;
-                    let begin_line = self.line_beginning;
                     self.eat().unwrap();
-                    let c = *self.eat().unwrap();
-                    let end_c = *self.eat().unwrap();
-                    assert!(end_c == '\'');
-                    tokens.push(Spanned {
-                        offset: begin,
-                        len: 3,
-                        line_beginning: begin_line,
-                        v: Token::Char(c),
-                    });
+                    let c = match self.eat() {
+                        None => {
+                            return Err(Spanned::new(
+                                Error::UnterminatedCharLiteral,
+                                Span::new(begin, self.offset),
+                            ));
+                        }
+                        Some('\\') => {
+                            let esc_begin = self.offset - 1;
+                            match self.eat() {
+                            Some('n') => '\n',
+                            Some('t') => '\t',
+                            Some('\\') => '\\',
+                            Some('"') => '"',
+                            Some('\'') => '\'',
+                            Some(_) => {
+                                return Err(Spanned::new(
+                                    Error::UnknownEscapeChar,
+                                    Span::new(esc_begin, self.offset),
+                                ));
+                            }
+                            None => {
+                                return Err(Spanned::new(
+                                    Error::MissingEscapeChar,
+                                    Span::new(esc_begin, self.offset),
+                                ));
+                            }
+                        }},
+                        Some(other) => *other,
+                    };
+
+                    let result = match self.eat() {
+                        Some('\'') => {
+                            Ok(Spanned::new(Token::Char(c), Span::new(begin, self.offset)))
+                        }
+                        Some(_) | None => Err(Spanned::new(
+                            Error::UnterminatedCharLiteral,
+                            Span::new(begin, self.offset),
+                        )),
+                    };
+                    tokens.push(result?);
                 }
-                'a'..='z' | 'A'..='Z' => {
-                    let begin = self.offset;
-                    let begin_line = self.line_beginning;
-                    while self
-                        .current()
-                        .is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_')
-                    {
-                        self.eat();
-                    }
-                    let end = self.offset;
-                    let slice: String = self.input[begin..end].iter().collect();
-                    match slice.as_str() {
-                        "return" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Return),
-                        }),
-                        "let" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Let),
-                        }),
-                        "true" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::True),
-                        }),
-                        "false" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::False),
-                        }),
-                        "if" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::If),
-                        }),
-                        "while" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::While),
-                        }),
-                        "func" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Func),
-                        }),
-                        "extern" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Extern),
-                        }),
-                        "cast" => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Keyword(Keyword::Cast),
-                        }),
-                        _ => tokens.push(Spanned {
-                            offset: begin,
-                            len: end - begin,
-                            line_beginning: begin_line,
-                            v: Token::Identifier(slice),
-                        }),
-                    }
+                'a'..='z' | 'A'..='Z' | '_' => {
+                    tokens.push(self.lex_ident_or_keyword()?);
                 }
                 c => {
-                    self.eat();
-                    return Err(Spanned {
-                        offset: self.offset - 1,
-                        line_beginning: self.line_beginning,
-                        len: 1,
-                        v: Error::UnexpectedChar(c),
-                    });
+                    return Err(Spanned::new(
+                        Error::UnexpectedChar(c),
+                        Span::new(self.offset, self.offset + 1),
+                    ));
                 }
             };
         }
         Ok(tokens)
+    }
+
+    fn lex_ident_or_keyword(&mut self) -> Result<Spanned<Token>, Spanned<Error>> {
+        let begin = self.offset;
+        while self
+            .current()
+            .is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_')
+        {
+            self.eat();
+        }
+        let end = self.offset;
+        let slice: String = self.input[begin..end].iter().collect();
+        Ok(match slice.as_str() {
+            "return" => Spanned::new(Token::Keyword(Keyword::Return), Span::new(begin, end)),
+            "let" => Spanned::new(Token::Keyword(Keyword::Let), Span::new(begin, end)),
+            "true" => Spanned::new(Token::Keyword(Keyword::True), Span::new(begin, end)),
+            "false" => Spanned::new(Token::Keyword(Keyword::False), Span::new(begin, end)),
+            "if" => Spanned::new(Token::Keyword(Keyword::If), Span::new(begin, end)),
+            "while" => Spanned::new(Token::Keyword(Keyword::While), Span::new(begin, end)),
+            "func" => Spanned::new(Token::Keyword(Keyword::Func), Span::new(begin, end)),
+            "extern" => Spanned::new(Token::Keyword(Keyword::Extern), Span::new(begin, end)),
+            "cast" => Spanned::new(Token::Keyword(Keyword::Cast), Span::new(begin, end)),
+            _ => Spanned::new(Token::Identifier(slice), Span::new(begin, end)),
+        })
     }
 
     fn skip_ws(&mut self) {
@@ -237,35 +219,22 @@ impl<'a> Lexer<'a> {
         }
         if self.current().is_some_and(|c| c.is_alphabetic()) {
             self.eat();
-            return Err(Spanned {
-                offset: begin,
-                len: self.offset - 1 - begin,
-                line_beginning: self.line_beginning,
-                v: Error::InvalidNumberLiteral,
-            });
+            return Err(Spanned::new(
+                Error::InvalidNumberLiteral,
+                Span::new(begin, self.offset),
+            ));
         }
         let number = self.input[begin..self.offset]
             .iter()
             .collect::<String>()
             .parse()
             .unwrap();
-        Ok(Spanned {
-            offset: begin,
-            len: self.offset - begin,
-            line_beginning: self.line_beginning,
-            v: number,
-        })
+        Ok(Spanned::new(number, Span::new(begin, self.offset)))
     }
 
     fn lex_and_skip_single_char<T>(&mut self, o: T) -> Result<Spanned<T>, Spanned<Error>> {
-        let prev_line_begin = self.line_beginning;
         self.eat().unwrap();
-        Ok(Spanned {
-            len: 1,
-            line_beginning: prev_line_begin,
-            offset: self.offset - 1,
-            v: o,
-        })
+        Ok(Spanned::new(o, Span::new(self.offset - 1, self.offset)))
     }
 
     fn lex_operator(&mut self) -> Result<Spanned<Operator>, Spanned<Error>> {
@@ -279,12 +248,10 @@ impl<'a> Lexer<'a> {
             '>' => self.lex_and_skip_single_char(Operator::More),
             '%' => self.lex_and_skip_single_char(Operator::Percent),
             '!' => self.lex_and_skip_single_char(Operator::Not),
-            c => Err(Spanned {
-                offset: self.offset,
-                len: 1,
-                line_beginning: self.line_beginning,
-                v: Error::UnexpectedChar(*c),
-            }),
+            c => Err(Spanned::new(
+                Error::UnexpectedChar(*c),
+                Span::new(self.offset, self.offset + 1),
+            )),
         }
     }
 
@@ -322,6 +289,16 @@ impl std::fmt::Display for Error {
                     f,
                     "You might have tried to use a binary (0b) or hexadecimal (0x) literal. They are not supported as of now"
                 )
+            }
+            Self::UnterminatedCharLiteral => {
+                logging::error!(f, "Unterminated character literal found")
+            }
+            Self::MissingEscapeChar => {
+                logging::errorln!(f, "Expected an escape character to be here")?;
+                logging::help!(f, "One of these: n, t, ', \", \\")
+            }
+            Self::UnknownEscapeChar => {
+                logging::error!(f, "Found an unknown escape character")
             }
         }
     }
