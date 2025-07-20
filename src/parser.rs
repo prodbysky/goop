@@ -39,6 +39,7 @@ impl<'a> Parser<'a> {
     fn parse_delimited_sep_list<T>(
         &mut self,
         begin_tk: Token,
+        sep: Token,
         end_tk: Token,
         element_parser: fn(&mut Parser) -> ParserResult<T>,
     ) -> ParserResult<Vec<T>> {
@@ -51,8 +52,8 @@ impl<'a> Parser<'a> {
             match self.peek() {
                 None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
                 Some(Spanned {
-                    v: Token::Comma, ..
-                }) => self.next(),
+                    v, ..
+                }) if v == sep => self.next(),
                 Some(Spanned { v, .. }) if v == end_tk => {
                     break;
                 }
@@ -69,7 +70,7 @@ impl<'a> Parser<'a> {
         let begin = self.expect_keyword(Keyword::Func)?;
         let identifier = self.expect_name()?;
         let args =
-            self.parse_delimited_sep_list(Token::OpenParen, Token::CloseParen, |parser| {
+            self.parse_delimited_sep_list(Token::OpenParen, Token::Comma, Token::CloseParen, |parser| {
                 let name = parser.expect_name()?;
                 let type_name = parser.expect_name()?;
                 Ok((name.v, type_name.v))
@@ -230,7 +231,7 @@ impl<'a> Parser<'a> {
     fn parse_call(&mut self, begin_token: &Spanned<String>) -> ParserResult<Spanned<Statement>> {
         let name = begin_token.v.clone();
         let args =
-            self.parse_delimited_sep_list(Token::OpenParen, Token::CloseParen, |parser| {
+            self.parse_delimited_sep_list(Token::OpenParen, Token::Comma, Token::CloseParen, |parser| {
                 parser.parse_expression()
             })?;
         let semicolon = self.expect_semicolon()?;
@@ -244,10 +245,9 @@ impl<'a> Parser<'a> {
         let begin = self.expect_keyword(Keyword::Extern)?;
         self.expect_keyword(Keyword::Func)?;
         let identifier = self.expect_name()?;
-        self.expect_token(Token::OpenParen)?;
 
         let args =
-            self.parse_delimited_sep_list(Token::OpenParen, Token::CloseParen, |parser| {
+            self.parse_delimited_sep_list(Token::OpenParen, Token::Comma, Token::CloseParen, |parser| {
                 let name = parser.expect_name()?;
                 let type_name = parser.expect_name()?;
                 Ok((name.v, type_name.v))
@@ -342,35 +342,13 @@ impl<'a> Parser<'a> {
                     s,
                 }) => {
                     self.next();
-                    let mut args = vec![];
-                    while self.peek().is_some_and(|t| t.v != Token::CloseParen) {
-                        let expr = self.parse_expression()?;
-                        args.push(expr);
-                        match self.peek() {
-                            None => {
-                                return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken));
-                            }
-                            Some(Spanned {
-                                v: Token::Comma, ..
-                            }) => self.next(),
-                            Some(Spanned {
-                                v: Token::CloseParen,
-                                ..
-                            }) => {
-                                break;
-                            }
-                            Some(Spanned { .. }) => {
-                                return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken));
-                            }
-                        };
-                    }
-                    let end = self.expect_token(Token::CloseParen)?;
+                    let args = self.parse_delimited_sep_list(Token::OpenParen, Token::Comma, Token::CloseParen, |parser| parser.parse_expression())?;
                     Ok(Spanned::new(
                         Expression::FuncCall {
                             name: ident.to_string(),
                             args,
                         },
-                        Span::new(s.begin, end.end()),
+                        Span::new(s.begin, s.end),
                     ))
                 }
                 None | Some(_) => Ok(Spanned::new(Expression::Identifier(ident.to_string()), s)),
