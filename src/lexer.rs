@@ -129,24 +129,25 @@ impl<'a> Lexer<'a> {
                         Some('\\') => {
                             let esc_begin = self.offset - 1;
                             match self.eat() {
-                            Some('n') => '\n',
-                            Some('t') => '\t',
-                            Some('\\') => '\\',
-                            Some('"') => '"',
-                            Some('\'') => '\'',
-                            Some(_) => {
-                                return Err(Spanned::new(
-                                    Error::UnknownEscapeChar,
-                                    Span::new(esc_begin, self.offset),
-                                ));
+                                Some('n') => '\n',
+                                Some('t') => '\t',
+                                Some('\\') => '\\',
+                                Some('"') => '"',
+                                Some('\'') => '\'',
+                                Some(_) => {
+                                    return Err(Spanned::new(
+                                        Error::UnknownEscapeChar,
+                                        Span::new(esc_begin, self.offset),
+                                    ));
+                                }
+                                None => {
+                                    return Err(Spanned::new(
+                                        Error::MissingEscapeChar,
+                                        Span::new(esc_begin, self.offset),
+                                    ));
+                                }
                             }
-                            None => {
-                                return Err(Spanned::new(
-                                    Error::MissingEscapeChar,
-                                    Span::new(esc_begin, self.offset),
-                                ));
-                            }
-                        }},
+                        }
                         Some(other) => *other,
                     };
 
