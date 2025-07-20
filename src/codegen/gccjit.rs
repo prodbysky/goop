@@ -10,7 +10,7 @@ pub fn generate_module(ir_mod: ir::Module, root_name: &str) {
     ctx.set_program_name(root_name);
     let functions = declare_functions(&ctx, &ir_mod);
 
-    for f in ir_mod.functions().iter().filter(|f| !f.external) {
+    for f in ir_mod.functions().iter().filter(|f| !f.is_external()) {
         let current = functions.get(f.name()).unwrap();
         // prealloc temporaries
         let temps: Vec<_> = f
@@ -203,7 +203,7 @@ fn declare_functions<'a>(
             .iter()
             .map(|arg| ctx.new_parameter(None, gcc_type(ctx, arg.ty()), arg.name()))
             .collect();
-        if f.external {
+        if f.is_external() {
             functions.insert(
                 f.name(),
                 ctx.new_function(

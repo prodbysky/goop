@@ -21,10 +21,10 @@ impl Module {
             let f_type = f.v.get_type();
             match f.v.body() {
                 None => {
-                    s.add_function(f.v.name.clone(), f.v.get_type(), true);
+                    s.add_function(f.v.name.clone(), f.v.get_type(), SymbolVisibility::External);
                 },
                 Some(b) => {
-                    let func = s.add_function(f.v.name.clone(), f.v.get_type(), false);
+                    let func = s.add_function(f.v.name.clone(), f.v.get_type(), SymbolVisibility::Exported);
                     for arg in &f_type.args {
                         let index = func.alloc_temp(arg.ty.clone());
                         func.put_var(
@@ -50,7 +50,7 @@ impl Module {
         &mut self,
         name: String,
         fn_type: parser::FunctionType,
-        external: bool,
+        function_visibility: SymbolVisibility,
     ) -> &mut Function {
         self.functions.push(Function {
             name,
@@ -60,7 +60,7 @@ impl Module {
             max_labels: 0,
             vars: vec![HashMap::new()],
             args: fn_type.args,
-            external,
+            visibility: function_visibility,
         });
         self.functions.last_mut().unwrap()
     }
@@ -77,7 +77,7 @@ impl std::fmt::Display for Module {
             writeln!(f, "    Function: {}", func.name())?;
             writeln!(f, "        Arguments: {:?}", func.args())?;
             writeln!(f, "        Return type: {:?}", func.ret_type)?;
-            if !func.external {
+            if !func.is_external() {
                 writeln!(f, "        Body:")?;
                 for st in &func.body {
                     writeln!(f, "            {st}")?;
@@ -100,7 +100,22 @@ pub struct Function {
     vars: Vec<HashMap<String, Value>>,
     max_labels: LabelIndex,
     args: Vec<FunctionArgument>,
-    pub external: bool,
+    visibility: SymbolVisibility,
+}
+
+// TODO: Private visibility
+#[derive(Debug, Clone, Copy)]
+pub enum SymbolVisibility {
+    /// Defined somewhere else not in this module
+    External,
+    /// Will be public in the final object file
+    Exported
+}
+
+impl SymbolVisibility {
+    pub fn is_external(&self) -> bool {
+        matches!(self, SymbolVisibility::External)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +148,15 @@ impl Function {
     pub fn args(&self) -> &[FunctionArgument] {
         &self.args
     }
+
+    pub fn is_external(&self) -> bool {
+        self.visibility.is_external()
+    }
+
+    pub fn visibility(&self) -> SymbolVisibility {
+        self.visibility
+    }
+
     fn add_statement(
         &mut self,
         s: &Spanned<parser::Statement>,
