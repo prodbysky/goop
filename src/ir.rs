@@ -443,7 +443,7 @@ impl Function {
                 })
             }
             parser::Expression::Cast { value, to } => {
-                let dest_type = type_from_type_name(&to);
+                let dest_type = type_from_type_name(to);
                 let place = self.alloc_temp(dest_type.clone());
                 let v = self.add_expr(value, funcs)?;
                 self.body.push(Instr::Cast {
