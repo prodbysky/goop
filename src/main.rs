@@ -104,6 +104,10 @@ fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e:
         &input[line_begin..e.begin()].chars().count() + 1
     );
     println!("{}", line);
+    let begin_of_bad_place = e.begin() - line_begin;
+
+    let len = e.end() - e.begin();
+    println!("{}{}", " ".repeat(begin_of_bad_place), "^".repeat(len));
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -146,6 +150,7 @@ impl<T> Spanned<T> {
     pub fn begin(&self) -> usize {
         self.span().begin
     }
+
     pub fn end(&self) -> usize {
         self.span().end
     }
