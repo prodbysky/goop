@@ -36,26 +36,24 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_function(&mut self) -> ParserResult<Spanned<Function>> {
-        let begin = self.expect_keyword(Keyword::Func)?;
-        let identifier = self.expect_name()?;
-        self.expect_token(Token::OpenParen)?;
+    fn parse_delimited_sep_list<T>(
+        &mut self,
+        begin_tk: Token,
+        end_tk: Token,
+        element_parser: fn(&mut Parser) -> ParserResult<T>,
+    ) -> ParserResult<Vec<T>> {
+        self.expect_token(begin_tk)?;
 
         let mut args = vec![];
 
-        while self.peek().is_some_and(|t| t.v != Token::CloseParen) {
-            let name = self.expect_name()?;
-            let type_name = self.expect_name()?;
-            args.push((name.v, type_name.v));
+        while self.peek().is_some_and(|t| t.v != end_tk) {
+            args.push(element_parser(self)?);
             match self.peek() {
                 None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
                 Some(Spanned {
                     v: Token::Comma, ..
                 }) => self.next(),
-                Some(Spanned {
-                    v: Token::CloseParen,
-                    ..
-                }) => {
+                Some(Spanned { v, .. }) if v == end_tk => {
                     break;
                 }
                 Some(Spanned { .. }) => {
@@ -63,7 +61,19 @@ impl<'a> Parser<'a> {
                 }
             };
         }
-        self.expect_token(Token::CloseParen)?;
+        self.expect_token(end_tk)?;
+        Ok(args)
+    }
+
+    fn parse_function(&mut self) -> ParserResult<Spanned<Function>> {
+        let begin = self.expect_keyword(Keyword::Func)?;
+        let identifier = self.expect_name()?;
+        let args =
+            self.parse_delimited_sep_list(Token::OpenParen, Token::CloseParen, |parser| {
+                let name = parser.expect_name()?;
+                let type_name = parser.expect_name()?;
+                Ok((name.v, type_name.v))
+            })?;
         let return_type = self.expect_name()?;
         let (body, end) = self.parse_block()?;
         Ok(Spanned::new(
@@ -219,27 +229,10 @@ impl<'a> Parser<'a> {
 
     fn parse_call(&mut self, begin_token: &Spanned<String>) -> ParserResult<Spanned<Statement>> {
         let name = begin_token.v.clone();
-        let mut args = vec![];
-        while self.peek().is_some_and(|t| t.v != Token::CloseParen) {
-            let expr = self.parse_expression()?;
-            args.push(expr);
-            match self.peek() {
-                None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
-                Some(Spanned {
-                    v: Token::Comma, ..
-                }) => self.next(),
-                Some(Spanned {
-                    v: Token::CloseParen,
-                    ..
-                }) => {
-                    break;
-                }
-                Some(Spanned { .. }) => {
-                    return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken));
-                }
-            };
-        }
-        self.expect_token(Token::CloseParen)?;
+        let args =
+            self.parse_delimited_sep_list(Token::OpenParen, Token::CloseParen, |parser| {
+                parser.parse_expression()
+            })?;
         let semicolon = self.expect_semicolon()?;
         Ok(Spanned::new(
             Statement::FuncCall { name, args },
@@ -253,29 +246,14 @@ impl<'a> Parser<'a> {
         let identifier = self.expect_name()?;
         self.expect_token(Token::OpenParen)?;
 
-        let mut args = vec![];
 
-        while self.peek().is_some_and(|t| t.v != Token::CloseParen) {
-            let name = self.expect_name()?;
-            let type_name = self.expect_name()?;
-            args.push((name.v, type_name.v));
-            match self.peek() {
-                None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
-                Some(Spanned {
-                    v: Token::Comma, ..
-                }) => self.next(),
-                Some(Spanned {
-                    v: Token::CloseParen,
-                    ..
-                }) => {
-                    break;
-                }
-                Some(Spanned { .. }) => {
-                    return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken));
-                }
-            };
-        }
-        self.expect_token(Token::CloseParen)?;
+        let args =
+            self.parse_delimited_sep_list(Token::OpenParen, Token::CloseParen, |parser| {
+                let name = parser.expect_name()?;
+                let type_name = parser.expect_name()?;
+                Ok((name.v, type_name.v))
+            })?;
+
         let return_type = self.expect_name()?;
         let end = self.expect_semicolon()?;
         Ok(Spanned::new(
