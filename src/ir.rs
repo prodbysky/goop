@@ -22,9 +22,13 @@ impl Module {
             match f.v.body() {
                 None => {
                     s.add_function(f.v.name.clone(), f.v.get_type(), SymbolVisibility::External);
-                },
+                }
                 Some(b) => {
-                    let func = s.add_function(f.v.name.clone(), f.v.get_type(), SymbolVisibility::Exported);
+                    let func = s.add_function(
+                        f.v.name.clone(),
+                        f.v.get_type(),
+                        SymbolVisibility::Exported,
+                    );
                     for arg in &f_type.args {
                         let index = func.alloc_temp(arg.ty.clone());
                         func.put_var(
@@ -38,7 +42,6 @@ impl Module {
                     for st in b {
                         func.add_statement(st, &func_types)?;
                     }
-
                 }
             }
         }
@@ -109,7 +112,7 @@ pub enum SymbolVisibility {
     /// Defined somewhere else not in this module
     External,
     /// Will be public in the final object file
-    Exported
+    Exported,
 }
 
 impl SymbolVisibility {
@@ -121,12 +124,12 @@ impl SymbolVisibility {
 #[derive(Debug, Clone)]
 pub struct FunctionArgument {
     name: String,
-    ty: Type
+    ty: Type,
 }
 
 impl FunctionArgument {
     pub fn new(name: String, ty: Type) -> Self {
-        Self {name, ty}
+        Self { name, ty }
     }
     pub fn name(&self) -> &str {
         &self.name

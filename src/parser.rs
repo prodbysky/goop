@@ -246,7 +246,6 @@ impl<'a> Parser<'a> {
         let identifier = self.expect_name()?;
         self.expect_token(Token::OpenParen)?;
 
-
         let args =
             self.parse_delimited_sep_list(Token::OpenParen, Token::CloseParen, |parser| {
                 let name = parser.expect_name()?;
@@ -564,7 +563,9 @@ impl Function {
         let args = self
             .args
             .iter()
-            .map(|(name, type_name)| ir::FunctionArgument::new(name.clone(), ir::type_from_type_name(type_name)))
+            .map(|(name, type_name)| {
+                ir::FunctionArgument::new(name.clone(), ir::type_from_type_name(type_name))
+            })
             .collect();
         let ret = ir::type_from_type_name(&self.ret_type);
         FunctionType {
