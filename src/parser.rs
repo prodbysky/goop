@@ -564,7 +564,7 @@ impl Function {
         let args = self
             .args
             .iter()
-            .map(|(name, type_name)| (name.clone(), ir::type_from_type_name(type_name)))
+            .map(|(name, type_name)| ir::FunctionArgument::new(name.clone(), ir::type_from_type_name(type_name)))
             .collect();
         let ret = ir::type_from_type_name(&self.ret_type);
         FunctionType {
@@ -582,7 +582,7 @@ impl Function {
 #[derive(Debug, Clone)]
 pub struct FunctionType {
     pub name: String,
-    pub args: Vec<(String, ir::Type)>,
+    pub args: Vec<ir::FunctionArgument>,
     pub ret: ir::Type,
 }
 

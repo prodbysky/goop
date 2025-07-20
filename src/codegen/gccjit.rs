@@ -201,7 +201,7 @@ fn declare_functions<'a>(
         let params: Vec<_> = t
             .args
             .iter()
-            .map(|(name, t)| ctx.new_parameter(None, gcc_type(ctx, t), name))
+            .map(|arg| ctx.new_parameter(None, gcc_type(ctx, arg.ty()), arg.name()))
             .collect();
         if f.external {
             functions.insert(

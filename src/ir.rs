@@ -19,21 +19,26 @@ impl Module {
 
         for f in ast_module.funcs() {
             let f_type = f.v.get_type();
-            let ext = f.v.body().is_none();
-            let func = s.add_function(f.v.name.clone(), f.v.get_type(), ext);
-            if let Some(b) = f.v.body() {
-                for arg in &f_type.args {
-                    let index = func.alloc_temp(arg.1.clone());
-                    func.put_var(
-                        &arg.0,
-                        Value::Temp {
-                            t: arg.1.to_owned(),
-                            i: index,
-                        },
-                    );
-                }
-                for st in b {
-                    func.add_statement(st, &func_types)?;
+            match f.v.body() {
+                None => {
+                    s.add_function(f.v.name.clone(), f.v.get_type(), true);
+                },
+                Some(b) => {
+                    let func = s.add_function(f.v.name.clone(), f.v.get_type(), false);
+                    for arg in &f_type.args {
+                        let index = func.alloc_temp(arg.ty.clone());
+                        func.put_var(
+                            arg.name(),
+                            Value::Temp {
+                                t: arg.ty.clone(),
+                                i: index,
+                            },
+                        );
+                    }
+                    for st in b {
+                        func.add_statement(st, &func_types)?;
+                    }
+
                 }
             }
         }
@@ -94,8 +99,26 @@ pub struct Function {
     values: Vec<Value>,
     vars: Vec<HashMap<String, Value>>,
     max_labels: LabelIndex,
-    args: Vec<(String, Type)>,
+    args: Vec<FunctionArgument>,
     pub external: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionArgument {
+    name: String,
+    ty: Type
+}
+
+impl FunctionArgument {
+    pub fn new(name: String, ty: Type) -> Self {
+        Self {name, ty}
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn ty(&self) -> &Type {
+        &self.ty
+    }
 }
 
 impl Function {
@@ -107,7 +130,7 @@ impl Function {
         }
     }
 
-    pub fn args(&self) -> &[(String, Type)] {
+    pub fn args(&self) -> &[FunctionArgument] {
         &self.args
     }
     fn add_statement(
@@ -243,7 +266,7 @@ impl Function {
                 }
 
                 for i in 0..args.len() {
-                    if args_into[i].get_type() != &receiver.args[i].1 {
+                    if args_into[i].get_type() != receiver.args[i].ty() {
                         return Err(Spanned::new(
                             Error::MismatchedArgumentTypes {
                                 callee_type: receiver.clone(),
@@ -417,7 +440,7 @@ impl Function {
                     send_load.push(self.add_expr(arg, funcs)?);
                 }
                 for i in 0..args.len() {
-                    if send_load[i].get_type() != &receiver.args[i].1 {
+                    if send_load[i].get_type() != receiver.args[i].ty() {
                         return Err(Spanned::new(
                             Error::MismatchedArgumentTypes {
                                 callee_type: receiver.clone(),
