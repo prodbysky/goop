@@ -10,7 +10,7 @@ pub fn generate_module(ir_mod: ir::Module, root_name: &str) {
     ctx.set_program_name(root_name);
     let functions = declare_functions(&ctx, &ir_mod);
 
-    for f in ir_mod.functions().iter().filter(|f| !f.external) {
+    for f in ir_mod.functions().iter().filter(|f| !f.is_external()) {
         let current = functions.get(f.name()).unwrap();
         // prealloc temporaries
         let temps: Vec<_> = f
@@ -21,8 +21,8 @@ pub fn generate_module(ir_mod: ir::Module, root_name: &str) {
             .collect();
 
         let mut blocks = vec![];
-        blocks.push(current.new_block(format!("l_0")));
-        let mut label = blocks.last().unwrap().clone();
+        blocks.push(current.new_block("l_0"));
+        let mut label = *blocks.last().unwrap();
 
         for st in f.body() {
             match st {
@@ -35,7 +35,7 @@ pub fn generate_module(ir_mod: ir::Module, root_name: &str) {
                 ir::Instr::Label(i) => {
                     let new = current.new_block(format!("l_{i}"));
                     blocks.push(new);
-                    label = blocks.last().unwrap().clone();
+                    label = *blocks.last().unwrap();
                 }
                 ir::Instr::Assign { index, v } => {
                     let v = get_value(&ctx, current, &temps, v);
@@ -184,8 +184,8 @@ fn do_binary_op<'a>(
     r: &ir::Value,
     output_type: gccjit::Type<'a>,
 ) -> gccjit::RValue<'a> {
-    let l = get_value(&ctx, current, &temps, l);
-    let r = get_value(&ctx, current, &temps, r);
+    let l = get_value(ctx, current, temps, l);
+    let r = get_value(ctx, current, temps, r);
     ctx.new_binary_op(None, op, output_type, l, r)
 }
 
@@ -197,13 +197,13 @@ fn declare_functions<'a>(
 
     for f in ir_mod.functions() {
         let t = f.get_type();
-        let ret = gcc_type(&ctx, &t.ret);
+        let ret = gcc_type(ctx, &t.ret);
         let params: Vec<_> = t
             .args
             .iter()
-            .map(|(name, t)| ctx.new_parameter(None, gcc_type(&ctx, t), name))
+            .map(|arg| ctx.new_parameter(None, gcc_type(ctx, arg.ty()), arg.name()))
             .collect();
-        if f.external {
+        if f.is_external() {
             functions.insert(
                 f.name(),
                 ctx.new_function(

@@ -19,21 +19,29 @@ impl Module {
 
         for f in ast_module.funcs() {
             let f_type = f.v.get_type();
-            let ext = f.v.body().is_none();
-            let func = s.add_function(f.v.name.clone(), f.v.get_type(), ext);
-            if let Some(b) = f.v.body() {
-                for arg in &f_type.args {
-                    let index = func.alloc_temp(arg.1.clone());
-                    func.put_var(
-                        &arg.0,
-                        Value::Temp {
-                            t: arg.1.to_owned(),
-                            i: index,
-                        },
-                    );
+            match f.v.body() {
+                None => {
+                    s.add_function(f.v.name.clone(), f.v.get_type(), SymbolVisibility::External);
                 }
-                for st in b {
-                    func.add_statement(st, &func_types)?;
+                Some(b) => {
+                    let func = s.add_function(
+                        f.v.name.clone(),
+                        f.v.get_type(),
+                        SymbolVisibility::Exported,
+                    );
+                    for arg in &f_type.args {
+                        let index = func.alloc_temp(arg.ty.clone());
+                        func.put_var(
+                            arg.name(),
+                            Value::Temp {
+                                t: arg.ty.clone(),
+                                i: index,
+                            },
+                        );
+                    }
+                    for st in b {
+                        func.add_statement(st, &func_types)?;
+                    }
                 }
             }
         }
@@ -45,7 +53,7 @@ impl Module {
         &mut self,
         name: String,
         fn_type: parser::FunctionType,
-        external: bool,
+        function_visibility: SymbolVisibility,
     ) -> &mut Function {
         self.functions.push(Function {
             name,
@@ -55,7 +63,7 @@ impl Module {
             max_labels: 0,
             vars: vec![HashMap::new()],
             args: fn_type.args,
-            external,
+            visibility: function_visibility,
         });
         self.functions.last_mut().unwrap()
     }
@@ -72,7 +80,7 @@ impl std::fmt::Display for Module {
             writeln!(f, "    Function: {}", func.name())?;
             writeln!(f, "        Arguments: {:?}", func.args())?;
             writeln!(f, "        Return type: {:?}", func.ret_type)?;
-            if !func.external {
+            if !func.is_external() {
                 writeln!(f, "        Body:")?;
                 for st in &func.body {
                     writeln!(f, "            {st}")?;
@@ -94,8 +102,41 @@ pub struct Function {
     values: Vec<Value>,
     vars: Vec<HashMap<String, Value>>,
     max_labels: LabelIndex,
-    args: Vec<(String, Type)>,
-    pub external: bool,
+    args: Vec<FunctionArgument>,
+    visibility: SymbolVisibility,
+}
+
+// TODO: Private visibility
+#[derive(Debug, Clone, Copy)]
+pub enum SymbolVisibility {
+    /// Defined somewhere else not in this module
+    External,
+    /// Will be public in the final object file
+    Exported,
+}
+
+impl SymbolVisibility {
+    pub fn is_external(&self) -> bool {
+        matches!(self, SymbolVisibility::External)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionArgument {
+    name: String,
+    ty: Type,
+}
+
+impl FunctionArgument {
+    pub fn new(name: String, ty: Type) -> Self {
+        Self { name, ty }
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn ty(&self) -> &Type {
+        &self.ty
+    }
 }
 
 impl Function {
@@ -107,9 +148,18 @@ impl Function {
         }
     }
 
-    pub fn args(&self) -> &[(String, Type)] {
+    pub fn args(&self) -> &[FunctionArgument] {
         &self.args
     }
+
+    pub fn is_external(&self) -> bool {
+        self.visibility.is_external()
+    }
+
+    pub fn visibility(&self) -> SymbolVisibility {
+        self.visibility
+    }
+
     fn add_statement(
         &mut self,
         s: &Spanned<parser::Statement>,
@@ -243,7 +293,7 @@ impl Function {
                 }
 
                 for i in 0..args.len() {
-                    if args_into[i].get_type() != &receiver.args[i].1 {
+                    if args_into[i].get_type() != receiver.args[i].ty() {
                         return Err(Spanned::new(
                             Error::MismatchedArgumentTypes {
                                 callee_type: receiver.clone(),
@@ -417,7 +467,7 @@ impl Function {
                     send_load.push(self.add_expr(arg, funcs)?);
                 }
                 for i in 0..args.len() {
-                    if send_load[i].get_type() != &receiver.args[i].1 {
+                    if send_load[i].get_type() != receiver.args[i].ty() {
                         return Err(Spanned::new(
                             Error::MismatchedArgumentTypes {
                                 callee_type: receiver.clone(),
@@ -443,7 +493,7 @@ impl Function {
                 })
             }
             parser::Expression::Cast { value, to } => {
-                let dest_type = type_from_type_name(&to);
+                let dest_type = type_from_type_name(to);
                 let place = self.alloc_temp(dest_type.clone());
                 let v = self.add_expr(value, funcs)?;
                 self.body.push(Instr::Cast {
