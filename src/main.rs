@@ -1,12 +1,15 @@
-mod codegen;
 mod config;
-mod ir;
-mod lexer;
 mod logging;
-mod parser;
+mod frontend;
+mod backend;
+mod location;
 
 use clap::Parser;
 use colored::Colorize;
+
+use backend::ir::ir;
+use frontend::parser::parser;
+use frontend::lexer::lexer;
 
 fn main() -> Result<(), ()> {
     let args = config::Args::parse();
@@ -43,7 +46,7 @@ fn main() -> Result<(), ()> {
             .unwrap_or(name);
 
         // generate object into this file
-        codegen::gccjit::generate_module(module, no_ext);
+        backend::codegen::gccjit::generate_module(module, no_ext);
         objects.push(format!("{no_ext}.o"));
     }
 
@@ -72,7 +75,7 @@ fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
     let tokens: Vec<_> = match lexer::Lexer::new(&input.chars().collect::<Vec<_>>()).lex() {
         Ok(ts) => ts,
         Err(e) => {
-            eprintln!("{}", e.v);
+            eprintln!("{}", e.inner());
             display_diagnostic_info(input, name, &e);
             return Err(());
         }
@@ -89,7 +92,7 @@ fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
     Ok(program)
 }
 
-fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &Spanned<T>) {
+fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &location::Spanned<T>) {
     let line_begin = input[0..e.begin()].rfind('\n').map(|i| i + 1).unwrap_or(0);
     let line_end = input[line_begin..]
         .find('\n')
@@ -110,55 +113,3 @@ fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e:
     println!("{}{}", " ".repeat(begin_of_bad_place), "^".repeat(len));
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Span {
-    begin: usize,
-    end: usize,
-}
-
-impl Span {
-    pub fn len(&self) -> usize {
-        assert!(self.begin <= self.end);
-        self.end - self.begin
-    }
-
-    pub fn new(begin: usize, end: usize) -> Self {
-        assert!(begin <= end);
-        Self { begin, end }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Spanned<T> {
-    s: Span,
-    v: T,
-}
-
-impl<T> Spanned<T> {
-    pub fn new(v: T, s: Span) -> Self {
-        Self { v, s }
-    }
-
-    pub fn inner(&self) -> &T {
-        &self.v
-    }
-
-    pub fn span(&self) -> &Span {
-        &self.s
-    }
-
-    pub fn begin(&self) -> usize {
-        self.span().begin
-    }
-
-    pub fn end(&self) -> usize {
-        self.span().end
-    }
-
-    pub fn map<U>(self, f: fn(Spanned<T>) -> U) -> Spanned<U> {
-        Spanned {
-            s: self.s,
-            v: f(self),
-        }
-    }
-}

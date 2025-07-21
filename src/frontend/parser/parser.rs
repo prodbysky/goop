@@ -1,9 +1,9 @@
-use crate::lexer::{Keyword, Operator, Token};
-use crate::{Span, Spanned};
-use crate::{ir, logging};
-use colored::Colorize;
+use crate::location::{Spanned, Span};
+use super::error::Error;
+use crate::frontend::lexer::lexer::{Token, Keyword, Operator};
+use crate::ir;
 
-type ParserResult<T> = Result<T, Spanned<Error>>;
+pub type ParserResult<T> = Result<T, Spanned<Error>>;
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a [Spanned<Token>]) -> Self {
         Self {
@@ -303,7 +303,7 @@ impl<'a> Parser<'a> {
         }) = self.peek()
         {
             let right = self.parse_unary()?;
-            let span = Span::new(right.begin(), s.end);
+            let span = Span::new(right.begin(), s.end());
             return Ok(Spanned::new(
                 Expression::Unary {
                     op,
@@ -348,7 +348,7 @@ impl<'a> Parser<'a> {
                             name: ident.to_string(),
                             args,
                         },
-                        Span::new(s.begin, s.end),
+                        Span::new(s.begin(), s.end()),
                     ))
                 }
                 None | Some(_) => Ok(Spanned::new(Expression::Identifier(ident.to_string()), s)),
@@ -392,7 +392,7 @@ impl<'a> Parser<'a> {
                         value: Box::new(value),
                         to: t_name.v,
                     },
-                    Span::new(s.begin, end.end()),
+                    Span::new(s.begin(), end.end()),
                 ))
             }
             None => Err(self.spanned_error_from_last_tk(Error::ExpectedExpression)),
@@ -487,7 +487,7 @@ impl<'a> Parser<'a> {
     }
 
     fn spanned_error_from_last_tk(&self, e: Error) -> Spanned<Error> {
-        Spanned::new(e, Span::new(self.prev_token.s.begin, self.prev_token.s.end))
+        Spanned::new(e, Span::new(self.prev_token.begin(), self.prev_token.end()))
     }
 
     fn peek(&self) -> Option<Spanned<Token>> {
@@ -624,71 +624,4 @@ pub enum Expression {
         value: Box<Spanned<Expression>>,
         to: String,
     },
-}
-
-#[derive(Debug)]
-pub enum Error {
-    ExpectedToken { expected: Token, got: Option<Token> },
-    UnexpectedToken,
-    ExpectedStartOfStatement,
-    NestedFunctionDefinition,
-    BooleanExpressionAsStatement,
-    UnexpectedTokenAfterIdentifierInStatement { got: Option<Token> },
-    ExpectedBinaryOperator,
-    UnbalancedParenthesis,
-    ExpectedExpression,
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ExpectedToken { expected, got } => {
-                let got_name = match got {
-                    None => "nothing".to_string(),
-                    Some(v) => format!("{v:?}"),
-                };
-                logging::error!(f, "Expected {expected:?}, instead got {got_name}")
-            }
-            Self::ExpectedStartOfStatement => {
-                logging::error!(f, "Expected start of statement")
-            }
-            Self::NestedFunctionDefinition => {
-                logging::error!(f, "Nested function definitions are not allowed YET")
-            }
-            Self::BooleanExpressionAsStatement => {
-                logging::error!(
-                    f,
-                    "Found an attempt to use a boolean (`true` or `false`) as a statement"
-                )
-            }
-            Self::UnexpectedTokenAfterIdentifierInStatement { got } => {
-                let got_name = match got {
-                    None => "nothing".to_string(),
-                    Some(v) => format!("{v:?}"),
-                };
-                logging::errorln!(
-                    f,
-                    "Unexpected token found after an identifier in a statement context: {got_name}"
-                )?;
-                logging::helpln!(
-                    f,
-                    "After that name you can put a parenthesis pair to make a function call or make a assigment operation"
-                )?;
-                logging::noteln!(f, "Function call: name(...)")?;
-                logging::note!(f, "Assignment: name = ...")
-            }
-            Self::ExpectedBinaryOperator => {
-                logging::error!(f, "Expected here to be a binary operator")
-            }
-            Self::UnexpectedToken => {
-                logging::error!(f, "Found an unexpected token")
-            }
-            Self::UnbalancedParenthesis => {
-                logging::error!(f, "Found an unbalanced parenthesis pairs")
-            }
-            Self::ExpectedExpression => {
-                logging::error!(f, "Expected here to be an expression here")
-            }
-        }
-    }
 }
