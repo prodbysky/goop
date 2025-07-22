@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::location::{Spanned, Span};
-use crate::frontend::parser::parser;
 use super::error::Error;
+use crate::frontend::parser::parser;
+use crate::location::{Span, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct Module {

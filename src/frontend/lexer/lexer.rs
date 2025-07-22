@@ -1,4 +1,4 @@
-use crate::frontend::lexer::error::Error;
+use super::error::Error;
 use crate::location::{Span, Spanned};
 
 #[derive(Debug)]
@@ -107,50 +107,7 @@ impl<'a> Lexer<'a> {
                 }
                 // TODO: Proper char lexing omg
                 '\'' => {
-                    let begin = self.offset;
-                    self.eat().unwrap();
-                    let c = match self.eat() {
-                        None => {
-                            return Err(Spanned::new(
-                                Error::UnterminatedCharLiteral,
-                                Span::new(begin, self.offset),
-                            ));
-                        }
-                        Some('\\') => {
-                            let esc_begin = self.offset - 1;
-                            match self.eat() {
-                                Some('n') => '\n',
-                                Some('t') => '\t',
-                                Some('\\') => '\\',
-                                Some('"') => '"',
-                                Some('\'') => '\'',
-                                Some(_) => {
-                                    return Err(Spanned::new(
-                                        Error::UnknownEscapeChar,
-                                        Span::new(esc_begin, self.offset),
-                                    ));
-                                }
-                                None => {
-                                    return Err(Spanned::new(
-                                        Error::MissingEscapeChar,
-                                        Span::new(esc_begin, self.offset),
-                                    ));
-                                }
-                            }
-                        }
-                        Some(other) => *other,
-                    };
-
-                    let result = match self.eat() {
-                        Some('\'') => {
-                            Ok(Spanned::new(Token::Char(c), Span::new(begin, self.offset)))
-                        }
-                        Some(_) | None => Err(Spanned::new(
-                            Error::UnterminatedCharLiteral,
-                            Span::new(begin, self.offset),
-                        )),
-                    };
-                    tokens.push(result?);
+                    tokens.push(self.lex_char_literal()?);
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
                     tokens.push(self.lex_ident_or_keyword()?);
@@ -246,6 +203,30 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn lex_char_literal(&mut self) -> Result<Spanned<Token>, Spanned<Error>> {
+        assert!(self.current().is_some_and(|c| *c == '\''));
+        let begin = self.offset;
+        self.eat();
+        let c = match self.eat() {
+            None => {
+                return Err(Spanned::new(
+                    Error::UnterminatedCharLiteral,
+                    Span::new(begin, self.offset),
+                ));
+            }
+            Some(other) => *other,
+        };
+        match self.eat() {
+            Some('\'') => Ok(Spanned::new(Token::Char(c), Span::new(begin, self.offset))),
+            None | Some(_) => {
+                return Err(Spanned::new(
+                    Error::UnterminatedCharLiteral,
+                    Span::new(begin, self.offset),
+                ));
+            }
+        }
+    }
+
     fn finished(&self) -> bool {
         self.offset >= self.input.len()
     }
@@ -255,7 +236,12 @@ impl<'a> Lexer<'a> {
     }
 
     fn eat(&mut self) -> Option<&char> {
+        let ch = self.input.get(self.offset);
         self.offset += 1;
-        self.input.get(self.offset - 1)
+        ch
+    }
+
+    fn peek(&self, offset: usize) -> Option<&char> {
+        self.input.get(self.offset + offset)
     }
 }

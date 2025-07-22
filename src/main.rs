@@ -1,15 +1,15 @@
-mod config;
-mod logging;
-mod frontend;
 mod backend;
+mod config;
+mod frontend;
 mod location;
+mod logging;
 
 use clap::Parser;
 use colored::Colorize;
 
 use backend::ir::ir;
-use frontend::parser::parser;
 use frontend::lexer::lexer;
+use frontend::parser::parser;
 
 fn main() -> Result<(), ()> {
     let args = config::Args::parse();
@@ -92,7 +92,11 @@ fn parse_source(input: &str, name: &str) -> Result<parser::Module, ()> {
     Ok(program)
 }
 
-fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e: &location::Spanned<T>) {
+fn display_diagnostic_info<T: std::fmt::Debug>(
+    input: &str,
+    input_name: &str,
+    e: &location::Spanned<T>,
+) {
     let line_begin = input[0..e.begin()].rfind('\n').map(|i| i + 1).unwrap_or(0);
     let line_end = input[line_begin..]
         .find('\n')
@@ -112,4 +116,3 @@ fn display_diagnostic_info<T: std::fmt::Debug>(input: &str, input_name: &str, e:
     let len = e.end() - e.begin();
     println!("{}{}", " ".repeat(begin_of_bad_place), "^".repeat(len));
 }
-

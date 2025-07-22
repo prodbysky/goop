@@ -1,8 +1,8 @@
 use colored::Colorize;
 
 use super::ir::Type;
-use crate::logging;
 use crate::frontend::parser::parser;
+use crate::logging;
 
 #[derive(Debug)]
 pub enum Error {

@@ -1,7 +1,7 @@
-use crate::location::{Spanned, Span};
 use super::error::Error;
-use crate::frontend::lexer::lexer::{Token, Keyword, Operator};
+use crate::frontend::lexer::lexer::{Keyword, Operator, Token};
 use crate::ir;
+use crate::location::{Span, Spanned};
 
 pub type ParserResult<T> = Result<T, Spanned<Error>>;
 impl<'a> Parser<'a> {
@@ -51,9 +51,7 @@ impl<'a> Parser<'a> {
             args.push(element_parser(self)?);
             match self.peek() {
                 None => return Err(self.spanned_error_from_last_tk(Error::UnexpectedToken)),
-                Some(Spanned {
-                    v, ..
-                }) if v == sep => self.next(),
+                Some(Spanned { v, .. }) if v == sep => self.next(),
                 Some(Spanned { v, .. }) if v == end_tk => {
                     break;
                 }
@@ -69,12 +67,16 @@ impl<'a> Parser<'a> {
     fn parse_function(&mut self) -> ParserResult<Spanned<Function>> {
         let begin = self.expect_keyword(Keyword::Func)?;
         let identifier = self.expect_name()?;
-        let args =
-            self.parse_delimited_sep_list(Token::OpenParen, Token::Comma, Token::CloseParen, |parser| {
+        let args = self.parse_delimited_sep_list(
+            Token::OpenParen,
+            Token::Comma,
+            Token::CloseParen,
+            |parser| {
                 let name = parser.expect_name()?;
                 let type_name = parser.expect_name()?;
                 Ok((name.v, type_name.v))
-            })?;
+            },
+        )?;
         let return_type = self.expect_name()?;
         let (body, end) = self.parse_block()?;
         Ok(Spanned::new(
@@ -230,10 +232,12 @@ impl<'a> Parser<'a> {
 
     fn parse_call(&mut self, begin_token: &Spanned<String>) -> ParserResult<Spanned<Statement>> {
         let name = begin_token.v.clone();
-        let args =
-            self.parse_delimited_sep_list(Token::OpenParen, Token::Comma, Token::CloseParen, |parser| {
-                parser.parse_expression()
-            })?;
+        let args = self.parse_delimited_sep_list(
+            Token::OpenParen,
+            Token::Comma,
+            Token::CloseParen,
+            |parser| parser.parse_expression(),
+        )?;
         let semicolon = self.expect_semicolon()?;
         Ok(Spanned::new(
             Statement::FuncCall { name, args },
@@ -246,12 +250,16 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::Func)?;
         let identifier = self.expect_name()?;
 
-        let args =
-            self.parse_delimited_sep_list(Token::OpenParen, Token::Comma, Token::CloseParen, |parser| {
+        let args = self.parse_delimited_sep_list(
+            Token::OpenParen,
+            Token::Comma,
+            Token::CloseParen,
+            |parser| {
                 let name = parser.expect_name()?;
                 let type_name = parser.expect_name()?;
                 Ok((name.v, type_name.v))
-            })?;
+            },
+        )?;
 
         let return_type = self.expect_name()?;
         let end = self.expect_semicolon()?;
@@ -342,7 +350,12 @@ impl<'a> Parser<'a> {
                     s,
                 }) => {
                     self.next();
-                    let args = self.parse_delimited_sep_list(Token::OpenParen, Token::Comma, Token::CloseParen, |parser| parser.parse_expression())?;
+                    let args = self.parse_delimited_sep_list(
+                        Token::OpenParen,
+                        Token::Comma,
+                        Token::CloseParen,
+                        |parser| parser.parse_expression(),
+                    )?;
                     Ok(Spanned::new(
                         Expression::FuncCall {
                             name: ident.to_string(),
